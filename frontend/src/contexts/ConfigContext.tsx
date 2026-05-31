@@ -365,6 +365,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const modelOptions: Record<ModelConfig['provider'], string[]> = {
     ollama: models.map(model => model.name),
     claude: ['claude-3-5-sonnet-latest'],
+    cerebras: ['llama-4-scout-17b-16e-instruct', 'llama3.3-70b', 'llama3.1-8b', 'qwen-2.5-32b'],
     groq: ['llama-3.3-70b-versatile'],
     openrouter: [],
     openai: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],

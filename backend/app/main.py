@@ -106,6 +106,13 @@ class TranscriptRequest(BaseModel):
     chunk_size: Optional[int] = 5000
     overlap: Optional[int] = 1000
     custom_prompt: Optional[str] = "Generate a summary of the meeting transcript."
+    clean_transcript: Optional[bool] = False  # Whether to clean text before summarizing
+
+class CleanTranscriptRequest(BaseModel):
+    """Request model for standalone transcript cleanup"""
+    text: str
+    model: str
+    model_name: str
 
 class SummaryProcessor:
     """Handles the processing of summaries in a thread-safe way"""
@@ -232,8 +239,16 @@ async def process_transcript_background(process_id: str, transcript: TranscriptR
                 provider_names = {"claude": "Anthropic", "groq": "Groq", "openai": "OpenAI"}
                 raise ValueError(f"{provider_names.get(transcript.model, transcript.model)} API key not configured. Please set your API key in the model settings.")
 
+        # Clean transcript if requested (AI text cleanup beta feature)
+        text_to_process = transcript.text
+        if transcript.clean_transcript:
+            logger.info(f"Text cleanup enabled for process {process_id}, cleaning transcript first...")
+            tp = TranscriptProcessor()
+            text_to_process = await tp.clean_transcript(transcript.text, transcript.model, transcript.model_name)
+            logger.info(f"Text cleanup complete for process {process_id}")
+
         _, all_json_data = await processor.process_transcript(
-            text=transcript.text,
+            text=text_to_process,
             model=transcript.model,
             model_name=transcript.model_name,
             chunk_size=transcript.chunk_size,
@@ -363,6 +378,17 @@ async def process_transcript_api(
 
     except Exception as e:
         logger.error(f"Error in process_transcript_api: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/clean-transcript")
+async def clean_transcript_api(request: CleanTranscriptRequest):
+    """Clean a transcript: remove filler words, fix grammar, polish punctuation."""
+    try:
+        tp = TranscriptProcessor()
+        cleaned = await tp.clean_transcript(request.text, request.model, request.model_name)
+        return JSONResponse({"cleaned_text": cleaned})
+    except Exception as e:
+        logger.error(f"Error in clean_transcript_api: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/get-summary/{meeting_id}")

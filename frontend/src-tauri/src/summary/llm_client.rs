@@ -344,3 +344,55 @@ fn provider_name(provider: &LLMProvider) -> &str {
         LLMProvider::CustomOpenAI => "Custom OpenAI",
     }
 }
+
+/// Clean transcript text using AI: remove filler words, fix grammar, polish punctuation.
+/// Uses the same LLM infrastructure as summary generation.
+pub async fn clean_transcript_text(
+    client: &Client,
+    provider: &LLMProvider,
+    model_name: &str,
+    api_key: &str,
+    text: &str,
+    ollama_endpoint: Option<&str>,
+    custom_openai_endpoint: Option<&str>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
+    top_p: Option<f32>,
+    app_data_dir: Option<&PathBuf>,
+    cancellation_token: Option<&CancellationToken>,
+) -> Result<String, String> {
+    let system_prompt = "You are a transcript editor. Clean up the text while preserving all meaning and speaker labels.";
+    let user_prompt = format!(
+        r#"Clean up this meeting transcript text:
+1. Remove filler words: um, uh, ah, like (when filler), you know, I mean, sort of, kind of, basically, actually (when filler), right? (when filler)
+2. Fix grammar: subject-verb agreement, tense consistency, sentence fragments
+3. Polish punctuation: proper commas, periods, capitalization
+4. Remove false starts and repetitions (e.g., "I think I think we should" → "I think we should")
+5. Preserve speaker labels exactly as they appear
+6. Do NOT change meaning, technical terms, proper nouns, or factual content
+7. Do NOT summarize — keep all content, just make it readable
+
+Return ONLY the cleaned text, no commentary.
+
+Transcript:
+{}"#,
+        text
+    );
+
+    generate_summary(
+        client,
+        provider,
+        model_name,
+        api_key,
+        system_prompt,
+        &user_prompt,
+        ollama_endpoint,
+        custom_openai_endpoint,
+        max_tokens,
+        temperature,
+        top_p,
+        app_data_dir,
+        cancellation_token,
+    )
+    .await
+}

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
 import { isOllamaNotInstalledError } from '@/lib/utils';
 import { BuiltInModelInfo } from '@/lib/builtin-ai';
+import { loadBetaFeatures } from '@/types/betaFeatures';
 
 type SummaryStatus = 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
 
@@ -104,6 +105,7 @@ export function useSummaryGeneration({
       });
 
       // Process transcript and get process_id
+      const betaFeatures = loadBetaFeatures();
       const result = await invokeTauri('api_process_transcript', {
         text: transcriptText,
         model: modelConfig.provider,
@@ -113,6 +115,7 @@ export function useSummaryGeneration({
         overlap: 1000,
         customPrompt: customPrompt,
         templateId: selectedTemplate,
+        cleanTranscript: betaFeatures.textCleanup,
       }) as any;
 
       const process_id = result.process_id;

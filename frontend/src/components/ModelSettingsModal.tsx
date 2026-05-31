@@ -31,7 +31,7 @@ import { cn, isOllamaNotInstalledError } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export interface ModelConfig {
-  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai';
+  provider: 'ollama' | 'groq' | 'claude' | 'openai' | 'openrouter' | 'builtin-ai' | 'custom-openai' | 'cerebras';
   model: string;
   whisperModel: string;
   apiKey?: string | null;
@@ -99,6 +99,13 @@ const GROQ_FALLBACK_MODELS = [
   'llama-3.1-70b-versatile',
   'mixtral-8x7b-32768',
   'gemma2-9b-it',
+];
+
+const CEREBRAS_FALLBACK_MODELS = [
+  'llama-4-scout-17b-16e-instruct',
+  'llama3.3-70b',
+  'llama3.1-8b',
+  'qwen-2.5-32b',
 ];
 
 interface ModelSettingsModalProps {
@@ -226,6 +233,7 @@ export function ModelSettingsModal({
     claude: claudeModels.length > 0 ? claudeModels : CLAUDE_FALLBACK_MODELS,
     groq: groqModels.length > 0 ? groqModels : GROQ_FALLBACK_MODELS,
     openai: openaiModels.length > 0 ? openaiModels : OPENAI_FALLBACK_MODELS,
+    cerebras: CEREBRAS_FALLBACK_MODELS,
     openrouter: openRouterModels.map((m) => m.id),
     'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
@@ -233,6 +241,7 @@ export function ModelSettingsModal({
 
   const requiresApiKey =
     modelConfig.provider === 'claude' ||
+    modelConfig.provider === 'cerebras' ||
     modelConfig.provider === 'groq' ||
     modelConfig.provider === 'openai' ||
     modelConfig.provider === 'openrouter';
@@ -873,6 +882,7 @@ export function ModelSettingsModal({
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
                 <SelectItem value="builtin-ai">Built-in AI (Offline, No API needed)</SelectItem>
+                <SelectItem value="cerebras">Cerebras</SelectItem>
                 <SelectItem value="claude">Claude</SelectItem>
                 <SelectItem value="custom-openai">Custom Server (OpenAI)</SelectItem>
                 <SelectItem value="groq">Groq</SelectItem>

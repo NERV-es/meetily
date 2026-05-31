@@ -311,4 +311,75 @@ class TranscriptProcessor:
         except Exception as e:
             logger.error(f"Error during TranscriptProcessor cleanup: {str(e)}", exc_info=True)
 
+    async def clean_transcript(self, text: str, model: str, model_name: str) -> str:
+        """
+        Clean a raw transcript using AI: remove filler words, fix grammar, polish punctuation.
+        Preserves speaker labels and meaning while making the text readable.
+
+        Args:
+            text: The raw transcript text.
+            model: The AI model provider ('claude', 'ollama', 'groq', 'openai').
+            model_name: The specific model name.
+
+        Returns:
+            The cleaned transcript text.
+        """
+        logger.info(f"Cleaning transcript (length {len(text)}) with model provider={model}, model_name={model_name}")
+
+        llm = None
+        try:
+            if model == "claude":
+                api_key = await self.db.get_api_key("claude")
+                if not api_key: raise ValueError("ANTHROPIC_API_KEY not set")
+                llm = AnthropicModel(model_name, provider=AnthropicProvider(api_key=api_key))
+            elif model == "ollama":
+                ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+                llm = OpenAIModel(model_name, provider=OpenAIProvider(base_url=f"{ollama_host}/v1"))
+            elif model == "groq":
+                api_key = await self.db.get_api_key("groq")
+                if not api_key: raise ValueError("GROQ_API_KEY not set")
+                llm = GroqModel(model_name, provider=GroqProvider(api_key=api_key))
+            elif model == "openai":
+                api_key = await self.db.get_api_key("openai")
+                if not api_key: raise ValueError("OPENAI_API_KEY not set")
+                llm = OpenAIModel(model_name, provider=OpenAIProvider(api_key=api_key))
+            else:
+                raise ValueError(f"Unsupported model provider: {model}")
+
+            agent = Agent(llm, result_type=str)
+
+            # Process in chunks to handle long transcripts
+            chunk_size = 8000
+            overlap = 200
+            step = chunk_size - overlap
+            chunks = [text[i:i+chunk_size] for i in range(0, len(text), step)]
+            cleaned_chunks = []
+
+            for i, chunk in enumerate(chunks):
+                logger.info(f"Cleaning chunk {i+1}/{len(chunks)}...")
+                result = await agent.run(
+                    f"""Clean up this meeting transcript text. Your job:
+1. Remove filler words: um, uh, ah, like (when used as filler), you know, I mean, sort of, kind of, basically, actually (when filler), right? (when filler)
+2. Fix grammar: subject-verb agreement, tense consistency, sentence fragments
+3. Polish punctuation: proper commas, periods, capitalization
+4. Remove false starts and repetitions (e.g., "I think I think we should" → "I think we should")
+5. Preserve speaker labels (e.g., "Speaker 1:", "[John]:") exactly as they appear
+6. Do NOT change the meaning, technical terms, proper nouns, or factual content
+7. Do NOT summarize — keep all the content, just make it readable
+
+Return ONLY the cleaned text, no commentary or explanation.
+
+Transcript chunk:
+{chunk}"""
+                )
+                cleaned_chunks.append(result.output)
+
+            cleaned = "\n".join(cleaned_chunks)
+            logger.info(f"Transcript cleaned: {len(text)} → {len(cleaned)} chars")
+            return cleaned
+
+        except Exception as e:
+            logger.error(f"Error cleaning transcript: {e}", exc_info=True)
+            raise
+
         

@@ -81,6 +81,7 @@ impl SummaryService {
         model_name: String,
         custom_prompt: String,
         template_id: String,
+        clean_transcript: bool,
     ) {
         let start_time = Instant::now();
         info!(
@@ -219,6 +220,38 @@ impl SummaryService {
         // Get app data directory for BuiltInAI provider
         let app_data_dir = _app.path().app_data_dir().ok();
 
+        // Clean transcript if requested (AI Text Cleanup beta feature)
+        let text_to_process = if clean_transcript {
+            info!("Text cleanup enabled for meeting_id: {}, cleaning transcript...", meeting_id);
+            match crate::summary::llm_client::clean_transcript_text(
+                &reqwest::Client::new(),
+                &provider,
+                &model_name,
+                &final_api_key,
+                &text,
+                ollama_endpoint.as_deref(),
+                custom_openai_endpoint.as_deref(),
+                custom_openai_max_tokens,
+                custom_openai_temperature,
+                custom_openai_top_p,
+                app_data_dir.as_ref(),
+                Some(&cancellation_token),
+            )
+            .await
+            {
+                Ok(cleaned) => {
+                    info!("✓ Text cleanup complete for meeting_id: {} ({} → {} chars)", meeting_id, text.len(), cleaned.len());
+                    cleaned
+                }
+                Err(e) => {
+                    warn!("Text cleanup failed for meeting_id: {}: {}. Proceeding with original text.", meeting_id, e);
+                    text.clone()
+                }
+            }
+        } else {
+            text.clone()
+        };
+
         // Generate summary
         let client = reqwest::Client::new();
         let result = generate_meeting_summary(
@@ -226,7 +259,7 @@ impl SummaryService {
             &provider,
             &model_name,
             &final_api_key,
-            &text,
+            &text_to_process,
             &custom_prompt,
             &template_id,
             token_threshold,

@@ -22,10 +22,17 @@ export interface BetaFeatures {
    * @since v0.3.0
    */
   importAndRetranscribe: boolean;
+  /**
+   * AI-powered text cleanup: removes filler words (um, uh, like, you know),
+   * fixes grammar, and polishes punctuation before summarization.
+   * @since v0.3.1
+   */
+  textCleanup: boolean;
 }
 
 export const DEFAULT_BETA_FEATURES: BetaFeatures = {
   importAndRetranscribe: true, // Default: enabled
+  textCleanup: true, // Default: enabled
 };
 
 
@@ -34,6 +41,7 @@ export const DEFAULT_BETA_FEATURES: BetaFeatures = {
  */
 export const BETA_FEATURE_NAMES: Record<keyof BetaFeatures, string> = {
   importAndRetranscribe: 'Import Audio & Retranscribe',
+  textCleanup: 'AI Text Cleanup',
 };
 
 /**
@@ -41,6 +49,7 @@ export const BETA_FEATURE_NAMES: Record<keyof BetaFeatures, string> = {
  */
 export const BETA_FEATURE_DESCRIPTIONS: Record<keyof BetaFeatures, string> = {
   importAndRetranscribe: 'Import audio files to transcribe or retranscribe existing meetings with different language settings.',
+  textCleanup: 'Use AI to remove filler words (um, uh, like, you know), fix grammar, and polish punctuation in transcripts before summarization.',
 };
 
 /**

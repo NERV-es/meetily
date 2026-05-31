@@ -38,9 +38,13 @@ pub(crate) use perf_trace;
 pub mod analytics;
 pub mod api;
 pub mod audio;
+pub mod calendar;
 pub mod config;
 pub mod console_utils;
 pub mod database;
+pub mod dictionary;
+pub mod export;
+pub mod meeting_detect;
 pub mod notifications;
 pub mod ollama;
 pub mod onboarding;
@@ -631,23 +635,23 @@ pub fn run() {
             api::api_get_custom_openai_config,
             api::api_test_custom_openai_connection,
             // Summary commands
-            summary::api_process_transcript,
-            summary::api_get_summary,
-            summary::api_save_meeting_summary,
-            summary::api_cancel_summary,
+            summary::commands::api_process_transcript,
+            summary::commands::api_get_summary,
+            summary::commands::api_save_meeting_summary,
+            summary::commands::api_cancel_summary,
             // Template commands
-            summary::api_list_templates,
-            summary::api_get_template_details,
-            summary::api_validate_template,
+            summary::template_commands::api_list_templates,
+            summary::template_commands::api_get_template_details,
+            summary::template_commands::api_validate_template,
             // Built-in AI commands
-            summary::summary_engine::builtin_ai_list_models,
-            summary::summary_engine::builtin_ai_get_model_info,
-            summary::summary_engine::builtin_ai_download_model,
-            summary::summary_engine::builtin_ai_cancel_download,
-            summary::summary_engine::builtin_ai_delete_model,
-            summary::summary_engine::builtin_ai_is_model_ready,
-            summary::summary_engine::builtin_ai_get_available_summary_model,
-            summary::summary_engine::builtin_ai_get_recommended_model,
+            summary::summary_engine::commands::builtin_ai_list_models,
+            summary::summary_engine::commands::builtin_ai_get_model_info,
+            summary::summary_engine::commands::builtin_ai_download_model,
+            summary::summary_engine::commands::builtin_ai_cancel_download,
+            summary::summary_engine::commands::builtin_ai_delete_model,
+            summary::summary_engine::commands::builtin_ai_is_model_ready,
+            summary::summary_engine::commands::builtin_ai_get_available_summary_model,
+            summary::summary_engine::commands::builtin_ai_get_recommended_model,
             openrouter::get_openrouter_models,
             audio::recording_preferences::get_recording_preferences,
             audio::recording_preferences::set_recording_preferences,
@@ -716,6 +720,26 @@ pub fn run() {
             audio::import::start_import_audio_command,
             audio::import::cancel_import_command,
             audio::import::is_import_in_progress_command,
+            // Export hooks
+            export::commands::export_meeting,
+            export::commands::get_export_dir,
+            // Calendar commands
+            calendar::commands::set_calendar_url,
+            calendar::commands::get_calendar_events,
+            calendar::commands::get_active_calendar_events,
+            calendar::commands::set_auto_record,
+            calendar::commands::refresh_calendar,
+            // Meeting auto-detection commands
+            meeting_detect::commands::set_meeting_detection,
+            meeting_detect::commands::get_detection_state,
+            meeting_detect::commands::set_meeting_apps,
+            meeting_detect::commands::set_silence_timeout,
+            // Dictionary commands
+            dictionary::commands::get_dictionary,
+            dictionary::commands::add_dictionary_entry,
+            dictionary::commands::remove_dictionary_entry,
+            dictionary::commands::update_dictionary_entry,
+            dictionary::commands::import_voiceink_dictionary,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

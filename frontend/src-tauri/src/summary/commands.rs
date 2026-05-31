@@ -176,6 +176,7 @@ pub async fn api_process_transcript<R: Runtime>(
     custom_prompt: Option<String>,
     template_id: Option<String>,
     _auth_token: Option<String>,
+    clean_transcript: Option<bool>,
 ) -> Result<ProcessTranscriptResponse, String> {
     use uuid::Uuid;
 
@@ -217,6 +218,7 @@ pub async fn api_process_transcript<R: Runtime>(
 
     // Spawn background task for actual processing
     let meeting_id_clone = m_id.clone();
+    let should_clean = clean_transcript.unwrap_or(false);
     tauri::async_runtime::spawn(async move {
         SummaryService::process_transcript_background(
             app,
@@ -227,6 +229,7 @@ pub async fn api_process_transcript<R: Runtime>(
             model_name,
             final_prompt,
             final_template_id,
+            should_clean,
         )
         .await;
     });

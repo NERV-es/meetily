@@ -140,100 +140,86 @@ pub async fn generate_with_builtin(
         }
     }
 
-    log::info!("Built-in AI generation request");
+    log::info!("Built-in AI generation via Ollama");
     log::info!("Model: {}", model_name);
 
-    // Get model definition
-    let model_def = models::get_model_by_name(model_name)
-        .ok_or_else(|| anyhow!("Unknown model: {}", model_name))?;
-
-    // Resolve model path with caching (avoids repeated filesystem I/O)
-    let model_path = get_cached_model_path(app_data_dir, model_name)?;
-
-    // Apply model-specific chat template
-    let formatted_prompt =
-        models::format_prompt(&model_def.template, system_prompt, user_prompt)?;
-    // Get or initialize sidecar manager
-    let manager = {
-        let mut global_manager = SIDECAR_MANAGER.lock().await;
-        if global_manager.is_none() {
-            log::info!("Initializing sidecar manager");
-            let new_manager = SidecarManager::new(app_data_dir.clone())?;
-            *global_manager = Some(Arc::new(new_manager));
-        }
-        global_manager.clone().unwrap()
+    // Map internal model names to Ollama model tags
+    let ollama_model = match model_name {
+        "gemma3:1b" => "gemma3:1b",
+        "gemma3:4b" => "gemma3:4b",
+        other => other, // pass through for any custom models
     };
 
-    // Ensure sidecar is running with this model
-    manager.ensure_running(model_path.clone()).await?;
+    let ollama_endpoint = std::env::var("OLLAMA_HOST")
+        .unwrap_or_else(|_| "http://localhost:11434".to_string());
 
-    // Check cancellation after sidecar startup
-    if let Some(token) = cancellation_token {
-        if token.is_cancelled() {
-            return Err(anyhow!("Generation cancelled during sidecar startup"));
+    let client = reqwest::Client::new();
+    let url = format!("{}/api/chat", ollama_endpoint);
+
+    let body = serde_json::json!({
+        "model": ollama_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "stream": false,
+        "options": {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "num_predict": 4096
         }
-    }
+    });
 
-    // Prepare generation request with model-specific sampling parameters
-    let request = Request::Generate {
-        prompt: formatted_prompt,
-        max_tokens: Some(models::DEFAULT_MAX_TOKENS),
-        context_size: Some(model_def.context_size),
-        model_path: Some(model_path.to_string_lossy().to_string()),
-        temperature: Some(model_def.sampling.temperature),
-        top_k: Some(model_def.sampling.top_k),
-        top_p: Some(model_def.sampling.top_p),
-        stop_tokens: Some(model_def.sampling.stop_tokens.clone()),
-    };
+    log::info!("Sending request to Ollama: {}", url);
 
-    let request_json = serde_json::to_string(&request)?;
-
-    // Send request with timeout
     let timeout = Duration::from_secs(models::GENERATION_TIMEOUT_SECS);
 
-    log::info!("Sending generation request to sidecar");
-
-    // Race between send_request and cancellation token
-    let response_json = if let Some(token) = cancellation_token {
+    let response_result = if let Some(token) = cancellation_token {
         tokio::select! {
-            result = manager.send_request(request_json, timeout) => {
-                result?
+            result = client.post(&url).json(&body).timeout(timeout).send() => {
+                result
             }
             _ = token.cancelled() => {
-                log::warn!("Generation cancelled by user, shutting down sidecar");
-                // Shutdown sidecar to stop generation immediately
-                if let Err(e) = manager.shutdown().await {
-                    log::error!("Failed to shutdown sidecar during cancellation: {}", e);
-                }
                 return Err(anyhow!("Generation cancelled by user"));
             }
         }
     } else {
-        manager.send_request(request_json, timeout).await?
+        client.post(&url).json(&body).timeout(timeout).send().await
     };
 
-    // Check cancellation before parsing response
+    let response = response_result
+        .map_err(|e| anyhow!("Ollama request failed: {}. Is Ollama running?", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body_text = response.text().await.unwrap_or_default();
+        // If model not found, hint to pull it
+        if status.as_u16() == 404 || body_text.contains("not found") {
+            return Err(anyhow!(
+                "Model '{}' not available in Ollama. Run: ollama pull {}",
+                ollama_model, ollama_model
+            ));
+        }
+        return Err(anyhow!("Ollama error ({}): {}", status, body_text));
+    }
+
+    // Check cancellation before parsing
     if let Some(token) = cancellation_token {
         if token.is_cancelled() {
             return Err(anyhow!("Generation cancelled"));
         }
     }
 
-    // Parse response
-    let response: Response = serde_json::from_str(&response_json)
-        .with_context(|| format!("Failed to parse response: {}", response_json))?;
+    let resp_body: serde_json::Value = response.json().await
+        .map_err(|e| anyhow!("Failed to parse Ollama response: {}", e))?;
 
-    match response {
-        Response::Response { text, error } => {
-            if let Some(err_msg) = error {
-                Err(anyhow!("Generation failed: {}", err_msg))
-            } else {
-                log::info!("Generation completed: {} chars", text.len());
-                Ok(text)
-            }
-        }
-        Response::Error { message } => Err(anyhow!("Sidecar error: {}", message)),
-    }
+    let text = resp_body["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    log::info!("Generation completed: {} chars", text.len());
+    Ok(text)
 }
 
 /// Shutdown the global sidecar (graceful cleanup)

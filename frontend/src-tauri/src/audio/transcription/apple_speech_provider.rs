@@ -1,38 +1,37 @@
-// audio/transcription/whisper_provider.rs
+// audio/transcription/apple_speech_provider.rs
 //
-// Whisper transcription provider implementation.
+// Apple Speech transcription provider implementation.
+// Follows the same pattern as whisper_provider.rs and parakeet_provider.rs.
 
 use super::provider::{TranscriptionError, TranscriptionProvider, TranscriptResult};
 use async_trait::async_trait;
+use log::info;
 use std::sync::Arc;
 
-/// Whisper transcription provider (wraps WhisperEngine)
-pub struct WhisperProvider {
-    engine: Arc<crate::whisper_engine::WhisperEngine>,
+/// Apple Speech transcription provider (wraps AppleSpeechEngine)
+pub struct AppleSpeechProvider {
+    engine: Arc<crate::apple_speech_engine::AppleSpeechEngine>,
 }
 
-impl WhisperProvider {
-    pub fn new(engine: Arc<crate::whisper_engine::WhisperEngine>) -> Self {
+impl AppleSpeechProvider {
+    pub fn new(engine: Arc<crate::apple_speech_engine::AppleSpeechEngine>) -> Self {
         Self { engine }
     }
 }
 
 #[async_trait]
-impl TranscriptionProvider for WhisperProvider {
+impl TranscriptionProvider for AppleSpeechProvider {
     async fn transcribe(
         &self,
         audio: Vec<f32>,
-        language: Option<String>,
+        _language: Option<String>,
     ) -> std::result::Result<TranscriptResult, TranscriptionError> {
-        let initial_prompt = crate::current_meeting_domain_prompt();
-        match self
-            .engine
-            .transcribe_audio_with_confidence(audio, language, initial_prompt)
-            .await
-        {
+        // Language is set at engine init time via locale, not per-transcription call.
+        // The recognizer uses the locale it was initialized with.
+        match self.engine.transcribe_audio(audio).await {
             Ok((text, confidence, is_partial)) => Ok(TranscriptResult {
                 text: text.trim().to_string(),
-                confidence: Some(confidence),
+                confidence,
                 is_partial,
             }),
             Err(e) => Err(TranscriptionError::EngineFailed(e.to_string())),
@@ -48,6 +47,6 @@ impl TranscriptionProvider for WhisperProvider {
     }
 
     fn provider_name(&self) -> &'static str {
-        "Whisper"
+        "Apple Speech"
     }
 }

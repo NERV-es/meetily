@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
 import { ModelManager } from './WhisperModelManager';
 import { ParakeetModelManager } from './ParakeetModelManager';
+import { MeetingDomainSettings } from './MeetingDomainSettings';
 
 
 export interface TranscriptModelProps {
@@ -173,6 +174,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                 onModelSelect={handleParakeetModelSelect}
                                 autoSave={true}
                             />
+                        </div>
+                    )}
+
+                    {uiProvider === 'localWhisper' && (
+                        <div className="mt-6">
+                            <MeetingDomainSettings />
                         </div>
                     )}
 

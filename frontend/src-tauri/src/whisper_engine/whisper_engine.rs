@@ -172,7 +172,10 @@ impl WhisperEngine {
         // Use centralized model catalog from config.rs
         let model_configs = WHISPER_MODEL_CATALOG;
 
+        let mut known_filenames = std::collections::HashSet::new();
+
         for &(name, filename, size_mb, accuracy, speed, description) in model_configs {
+            known_filenames.insert(filename.to_string());
             let model_path = models_dir.join(filename);
             let status = if model_path.exists() {
                 // Check if file size is reasonable (at least 1MB for a valid model)
@@ -245,7 +248,62 @@ impl WhisperEngine {
             
             models.push(model_info);
         }
-        
+
+        // Scan for custom models in the directory (#409)
+        if models_dir.exists() {
+            if let Ok(mut entries) = tokio::fs::read_dir(models_dir).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(extension) = path.extension() {
+                            if extension == "bin" {
+                                if let Some(file_name_os) = path.file_name() {
+                                    let filename = file_name_os.to_string_lossy().to_string();
+                                    if !known_filenames.contains(&filename) {
+                                        if let Ok(metadata) = std::fs::metadata(&path) {
+                                            let file_size_bytes = metadata.len();
+                                            let file_size_mb = (file_size_bytes / (1024 * 1024)) as u32;
+
+                                            let mut clean_name = filename.strip_suffix(".bin").unwrap_or(&filename).to_string();
+                                            if clean_name.starts_with("ggml-") {
+                                                clean_name = clean_name.strip_prefix("ggml-").unwrap().to_string();
+                                            }
+
+                                            let status = if file_size_mb > 1 {
+                                                match self.validate_model_file(&path).await {
+                                                    Ok(_) => ModelStatus::Available,
+                                                    Err(_) => ModelStatus::Corrupted {
+                                                        file_size: file_size_bytes,
+                                                        expected_min_size: 1024 * 1024,
+                                                    },
+                                                }
+                                            } else {
+                                                ModelStatus::Corrupted {
+                                                    file_size: file_size_bytes,
+                                                    expected_min_size: 1024 * 1024,
+                                                }
+                                            };
+
+                                            log::info!("Discovered custom model: {}", clean_name);
+                                            models.push(ModelInfo {
+                                                name: clean_name,
+                                                path: path.clone(),
+                                                size_mb: file_size_mb,
+                                                accuracy: "Unknown".to_string(),
+                                                speed: "Unknown".to_string(),
+                                                status,
+                                                description: format!("Custom model: {}", filename),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Update internal cache
         let mut available_models = self.available_models.write().await;
         available_models.clear();

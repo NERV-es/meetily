@@ -274,6 +274,25 @@ pub fn start_transcription_task<R: Runtime>(
                                                 worker_id, e
                                             );
                                         }
+
+                                        // Queue for parallel enhancement if enabled
+                                        if let Some(enh_state) = app_clone.try_state::<super::enhancement::EnhancementStateHandle>() {
+                                            let enh = enh_state.read().await;
+                                            if enh.config.enabled && chunk_duration >= enh.config.min_chunk_duration {
+                                                if let Some(ref sender) = enh.sender {
+                                                    let req = super::enhancement::EnhancementRequest {
+                                                        sequence_id,
+                                                        audio_data: diarization_samples.clone(),
+                                                        sample_rate: 16000,
+                                                        primary_text: update.text.clone(),
+                                                        audio_start_time,
+                                                        audio_end_time,
+                                                        duration: chunk_duration,
+                                                    };
+                                                    let _ = sender.send(req);
+                                                }
+                                            }
+                                        }
                                         // PERFORMANCE: Removed verbose logging of every emission
                                     } else if !transcript.trim().is_empty() && should_log_this_chunk
                                     {

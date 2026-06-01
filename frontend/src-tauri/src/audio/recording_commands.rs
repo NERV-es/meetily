@@ -257,6 +257,19 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
         *global_task = Some(task_handle);
     }
 
+    // Start enhancement pipeline if enabled
+    {
+        if let Some(enh_state) = app.try_state::<transcription::EnhancementStateHandle>() {
+            let mut enh = tauri::async_runtime::block_on(enh_state.write());
+            if enh.config.enabled && enh.config.api_key.is_some() {
+                let sender = transcription::start_enhancement_pipeline(app.clone(), enh.config.clone());
+                enh.sender = Some(sender);
+                enh.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+                log::info!("✨ Enhancement pipeline started for recording");
+            }
+        }
+    }
+
     // CRITICAL: Listen for transcript-update events and save to recording manager
     // This enables transcript history persistence for page reload sync
     // Store listener ID for cleanup during stop_recording to ensure microphone is released
@@ -427,6 +440,19 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
     {
         let mut global_task = TRANSCRIPTION_TASK.lock().unwrap();
         *global_task = Some(task_handle);
+    }
+
+    // Start enhancement pipeline if enabled
+    {
+        if let Some(enh_state) = app.try_state::<transcription::EnhancementStateHandle>() {
+            let mut enh = tauri::async_runtime::block_on(enh_state.write());
+            if enh.config.enabled && enh.config.api_key.is_some() {
+                let sender = transcription::start_enhancement_pipeline(app.clone(), enh.config.clone());
+                enh.sender = Some(sender);
+                enh.is_running.store(true, std::sync::atomic::Ordering::SeqCst);
+                log::info!("✨ Enhancement pipeline started for recording");
+            }
+        }
     }
 
     // CRITICAL: Listen for transcript-update events and save to recording manager
@@ -851,6 +877,14 @@ pub async fn stop_recording<R: Runtime>(
     // Set recording flag to false
     info!("🔍 Setting IS_RECORDING to false");
     IS_RECORDING.store(false, Ordering::SeqCst);
+
+    // Stop enhancement pipeline
+    if let Some(enh_state) = app.try_state::<transcription::EnhancementStateHandle>() {
+        let mut enh = enh_state.write().await;
+        enh.sender = None; // Drop sender → closes channel → pipeline shuts down
+        enh.is_running.store(false, std::sync::atomic::Ordering::SeqCst);
+        info!("✨ Enhancement pipeline stopped");
+    }
 
     // Step 4.5: Prepare metadata for frontend (NO database save)
     // NOTE: We do NOT save to database here. The frontend will save after all transcripts are displayed.

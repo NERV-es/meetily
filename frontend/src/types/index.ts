@@ -19,6 +19,9 @@ export interface Transcript {
   // Speaker diarization
   speaker_id?: string;
   speaker_label?: string;
+  // Enhancement (parallel cloud upgrade)
+  enhanced?: boolean;
+  enhancement_provider?: string;
 }
 
 export interface TranscriptUpdate {
@@ -36,6 +39,16 @@ export interface TranscriptUpdate {
   // Speaker diarization
   speaker_id?: string;
   speaker_label?: string;
+}
+
+export interface TranscriptEnhancement {
+  sequence_id: number;
+  enhanced_text: string;
+  provider: string;
+  confidence: number;
+  processing_time_ms: number;
+  audio_start_time: number;
+  audio_end_time: number;
 }
 
 export interface Block {

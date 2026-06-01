@@ -361,6 +361,39 @@ export function TranscriptProvider({ children }: { children: ReactNode }) {
     };
   }, [currentMeetingId]); // Add currentMeetingId dependency
 
+  // Enhancement listener: merges cloud-upgraded text into existing transcripts
+  useEffect(() => {
+    let unlistenEnhancement: (() => void) | null = null;
+
+    const setupEnhancementListener = async () => {
+      try {
+        unlistenEnhancement = await transcriptService.onTranscriptEnhancement((enhancement) => {
+          console.log('✨ Enhancement received for sequence_id:', enhancement.sequence_id);
+          setTranscripts(prev => prev.map(t => {
+            if (t.sequence_id === enhancement.sequence_id) {
+              return {
+                ...t,
+                text: enhancement.enhanced_text,
+                confidence: enhancement.confidence,
+                enhanced: true,
+                enhancement_provider: enhancement.provider,
+              };
+            }
+            return t;
+          }));
+        });
+      } catch (error) {
+        console.warn('Enhancement listener setup failed (non-critical):', error);
+      }
+    };
+
+    setupEnhancementListener();
+
+    return () => {
+      if (unlistenEnhancement) unlistenEnhancement();
+    };
+  }, []);
+
   // Sync transcript history and meeting name from backend on reload
   // This fixes the issue where reloading during active recording causes state desync
   useEffect(() => {

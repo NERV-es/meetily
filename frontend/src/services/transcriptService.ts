@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { TranscriptUpdate, Transcript } from '@/types';
+import { TranscriptUpdate, Transcript, TranscriptEnhancement } from '@/types';
 
 export interface TranscriptionStatus {
   chunks_in_queue: number;
@@ -23,6 +23,22 @@ export interface TranscriptionErrorPayload {
 
 export interface ModelDownloadCompletePayload {
   modelName: string;
+}
+
+export interface EnhancementConfig {
+  enabled: boolean;
+  provider: string;
+  api_key?: string;
+  model?: string;
+  min_chunk_duration: number;
+  max_concurrent: number;
+}
+
+export interface EnhancementStats {
+  total_enhanced: number;
+  total_failed: number;
+  avg_processing_time_ms: number;
+  is_running: boolean;
 }
 
 /**
@@ -110,6 +126,38 @@ export class TranscriptService {
     return listen<ModelDownloadCompletePayload>('parakeet-model-download-complete', (event) => {
       callback(event.payload.modelName);
     });
+  }
+
+  /**
+   * Listen for transcript enhancement events (parallel cloud upgrades)
+   * @param callback - Function to call when an enhanced transcript segment arrives
+   * @returns Promise that resolves to unlisten function
+   */
+  async onTranscriptEnhancement(callback: (enhancement: TranscriptEnhancement) => void): Promise<UnlistenFn> {
+    return listen<TranscriptEnhancement>('transcript-enhancement', (event) => {
+      callback(event.payload);
+    });
+  }
+
+  /**
+   * Get enhancement configuration
+   */
+  async getEnhancementConfig(): Promise<EnhancementConfig> {
+    return invoke<EnhancementConfig>('get_enhancement_config');
+  }
+
+  /**
+   * Set enhancement configuration
+   */
+  async setEnhancementConfig(config: EnhancementConfig): Promise<void> {
+    return invoke('set_enhancement_config', { config });
+  }
+
+  /**
+   * Get enhancement pipeline statistics
+   */
+  async getEnhancementStats(): Promise<EnhancementStats> {
+    return invoke<EnhancementStats>('get_enhancement_stats');
   }
 }
 

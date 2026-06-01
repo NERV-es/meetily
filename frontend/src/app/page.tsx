@@ -22,6 +22,7 @@ import { indexedDBService } from '@/services/indexedDBService';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { ModelQuickSwitcher } from '@/components/ModelQuickSwitcher';
 
 export default function Home() {
   // Local page state (not moved to contexts)
@@ -252,6 +253,7 @@ export default function Home() {
                   marginLeft: sidebarCollapsed ? '4rem' : '16rem'
                 }}
               >
+                <ModelQuickSwitcher isRecording={recordingState.isRecording} />
                 <AnimatePresence>
                   {modelStatus && modelStatus.stage !== 'ready' && (
                     <motion.div

@@ -9,6 +9,7 @@ pub mod parakeet_provider;
 #[cfg(feature = "apple-speech")]
 pub mod apple_speech_provider;
 pub mod engine;
+pub mod enhancement;
 pub mod worker;
 
 // Re-export commonly used types
@@ -28,4 +29,16 @@ pub use worker::{
     start_transcription_task,
     reset_speech_detected_flag,
     TranscriptUpdate
+};
+pub use enhancement::{
+    EnhancementConfig,
+    EnhancementState,
+    EnhancementStateHandle,
+    EnhancementRequest,
+    TranscriptEnhancement,
+    new_enhancement_state,
+    start_enhancement_pipeline,
+    get_enhancement_config,
+    set_enhancement_config,
+    get_enhancement_stats,
 };

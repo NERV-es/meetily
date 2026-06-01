@@ -11,7 +11,7 @@ import { MeetingDomainSettings } from './MeetingDomainSettings';
 
 
 export interface TranscriptModelProps {
-    provider: 'localWhisper' | 'parakeet' | 'deepgram' | 'elevenLabs' | 'groq' | 'openai' | 'assemblyai' | 'gemini';
+    provider: 'localWhisper' | 'parakeet' | 'deepgram' | 'elevenLabs' | 'groq' | 'openai' | 'assemblyai' | 'gemini' | 'cartesia' | 'speechmatics';
     model: string;
     apiKey?: string | null;
 }
@@ -60,8 +60,10 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         openai: ['whisper-1', 'gpt-4o-transcribe', 'gpt-4o-mini-transcribe'],
         assemblyai: ['best', 'nano'],
         gemini: ['gemini-2.0-flash'],
+        cartesia: ['sonic'],
+        speechmatics: ['en', 'multilingual'],
     };
-    const requiresApiKey = transcriptModelConfig.provider === 'deepgram' || transcriptModelConfig.provider === 'elevenLabs' || transcriptModelConfig.provider === 'openai' || transcriptModelConfig.provider === 'groq' || transcriptModelConfig.provider === 'assemblyai' || transcriptModelConfig.provider === 'gemini';
+    const requiresApiKey = transcriptModelConfig.provider === 'deepgram' || transcriptModelConfig.provider === 'elevenLabs' || transcriptModelConfig.provider === 'openai' || transcriptModelConfig.provider === 'groq' || transcriptModelConfig.provider === 'assemblyai' || transcriptModelConfig.provider === 'gemini' || transcriptModelConfig.provider === 'cartesia' || transcriptModelConfig.provider === 'speechmatics';
 
     const handleInputClick = () => {
         if (isApiKeyLocked) {
@@ -132,6 +134,8 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     <SelectItem value="assemblyai">☁️ AssemblyAI</SelectItem>
                                     <SelectItem value="gemini">☁️ Gemini</SelectItem>
                                     <SelectItem value="elevenLabs">☁️ ElevenLabs</SelectItem>
+                                    <SelectItem value="cartesia">☁️ Cartesia</SelectItem>
+                                    <SelectItem value="speechmatics">☁️ Speechmatics</SelectItem>
                                 </SelectContent>
                             </Select>
 

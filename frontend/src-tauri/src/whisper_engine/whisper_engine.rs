@@ -304,6 +304,67 @@ impl WhisperEngine {
             }
         }
 
+        // Also scan shared LocalModels/whisper/ directory (models shared with VoiceInk etc.)
+        let shared_dir = dirs::home_dir()
+            .map(|h| h.join("Library/Application Support/LocalModels/whisper"));
+        if let Some(ref shared_path) = shared_dir {
+            if shared_path.exists() && shared_path != models_dir {
+                log::info!("Scanning shared whisper models: {}", shared_path.display());
+                if let Ok(mut entries) = tokio::fs::read_dir(shared_path).await {
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(ext) = path.extension() {
+                                if ext == "bin" {
+                                    if let Some(file_name_os) = path.file_name() {
+                                        let filename = file_name_os.to_string_lossy().to_string();
+                                        if !known_filenames.contains(&filename) {
+                                            known_filenames.insert(filename.clone());
+                                            if let Ok(metadata) = std::fs::metadata(&path) {
+                                                let file_size_bytes = metadata.len();
+                                                let file_size_mb = (file_size_bytes / (1024 * 1024)) as u32;
+
+                                                let mut clean_name = filename.strip_suffix(".bin").unwrap_or(&filename).to_string();
+                                                if clean_name.starts_with("ggml-") {
+                                                    clean_name = clean_name.strip_prefix("ggml-").unwrap().to_string();
+                                                }
+
+                                                let status = if file_size_mb > 1 {
+                                                    match self.validate_model_file(&path).await {
+                                                        Ok(_) => ModelStatus::Available,
+                                                        Err(_) => ModelStatus::Corrupted {
+                                                            file_size: file_size_bytes,
+                                                            expected_min_size: 1024 * 1024,
+                                                        },
+                                                    }
+                                                } else {
+                                                    ModelStatus::Corrupted {
+                                                        file_size: file_size_bytes,
+                                                        expected_min_size: 1024 * 1024,
+                                                    }
+                                                };
+
+                                                log::info!("Found shared model: {} (from LocalModels)", clean_name);
+                                                models.push(ModelInfo {
+                                                    name: clean_name,
+                                                    path: path.clone(),
+                                                    size_mb: file_size_mb,
+                                                    accuracy: "Unknown".to_string(),
+                                                    speed: "Unknown".to_string(),
+                                                    status,
+                                                    description: format!("Shared model: {}", filename),
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Update internal cache
         let mut available_models = self.available_models.write().await;
         available_models.clear();
@@ -1160,6 +1221,24 @@ impl WhisperEngine {
         {
             let mut active = self.active_downloads.write().await;
             active.remove(model_name);
+        }
+
+        // Sync to shared LocalModels/whisper/ directory for cross-app availability
+        if let Some(home) = dirs::home_dir() {
+            let shared_dir = home.join("Library/Application Support/LocalModels/whisper");
+            if let Err(e) = tokio::fs::create_dir_all(&shared_dir).await {
+                log::warn!("Failed to create shared models dir: {}", e);
+            } else {
+                let shared_path = shared_dir.join(&filename);
+                if !shared_path.exists() {
+                    // Symlink from shared dir to our downloaded file
+                    if let Err(e) = tokio::fs::symlink(&file_path, &shared_path).await {
+                        log::warn!("Failed to create shared symlink: {}", e);
+                    } else {
+                        log::info!("Synced model to shared dir: {}", shared_path.display());
+                    }
+                }
+            }
         }
 
         Ok(())

@@ -26,6 +26,14 @@ pub async fn set_feature_flag<R: Runtime>(
                 flags.transcript_tags_enabled = enabled;
                 super::transcript_tags::set_enabled(enabled);
             }
+            "diarization_enabled" | "diarizationEnabled" => flags.diarization_enabled = enabled,
+            "dictionary_enabled" | "dictionaryEnabled" => flags.dictionary_enabled = enabled,
+            "screen_context_enabled" | "screenContextEnabled" => flags.screen_context_enabled = enabled,
+            "calendar_enabled" | "calendarEnabled" => flags.calendar_enabled = enabled,
+            "atoll_bridge_enabled" | "atollBridgeEnabled" => flags.atoll_bridge_enabled = enabled,
+            "analytics_enabled" | "analyticsEnabled" => flags.analytics_enabled = enabled,
+            "whisper_preload" | "whisperPreload" => flags.whisper_preload = enabled,
+            "parakeet_preload" | "parakeetPreload" => flags.parakeet_preload = enabled,
             _ => return Err(format!("Unknown feature flag: {}", feature)),
         }
     }

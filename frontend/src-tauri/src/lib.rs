@@ -199,19 +199,22 @@ async fn start_recording<R: Runtime>(
 
             log_info!("Recording started successfully");
 
-            // Start screen context capture
-            if let Some(screen_state) = app.try_state::<std::sync::Arc<tokio::sync::RwLock<screen_context::ScreenContextState>>>() {
-                let mut s = screen_state.write().await;
-                s.is_capturing = true;
-                s.snapshots.clear();
-                let state_clone = (*screen_state).clone();
-                let (tx, rx) = tokio::sync::watch::channel(false);
-                // Store the stop sender somewhere accessible
-                if let Some(stop_tx) = app.try_state::<std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>>>() {
-                    *stop_tx.lock().await = Some(tx);
+            // Start screen context capture — only if feature enabled
+            let ff_sc = app.state::<feature_flags::FeatureFlagState>();
+            let sc_enabled = ff_sc.flags.read().await.screen_context_enabled;
+            if sc_enabled {
+                if let Some(screen_state) = app.try_state::<std::sync::Arc<tokio::sync::RwLock<screen_context::ScreenContextState>>>() {
+                    let mut s = screen_state.write().await;
+                    s.is_capturing = true;
+                    s.snapshots.clear();
+                    let state_clone = (*screen_state).clone();
+                    let (tx, rx) = tokio::sync::watch::channel(false);
+                    if let Some(stop_tx) = app.try_state::<std::sync::Arc<tokio::sync::Mutex<Option<tokio::sync::watch::Sender<bool>>>>>() {
+                        *stop_tx.lock().await = Some(tx);
+                    }
+                    drop(s);
+                    tauri::async_runtime::spawn(screen_context::start_capture_loop(state_clone, rx));
                 }
-                drop(s);
-                tauri::async_runtime::spawn(screen_context::start_capture_loop(state_clone, rx));
             }
 
             // Show recording started notification through NotificationManager
@@ -624,30 +627,38 @@ pub fn run() {
         .setup(|_app| {
             log::info!("Application setup complete");
 
-            // Initialize feature flags and crash-recovery mute check
+            // Initialize feature flags FIRST — everything else gates on these
             feature_flags::system_mute::ensure_unmuted_on_startup();
+            let ff_state = _app.state::<feature_flags::FeatureFlagState>().inner().clone();
+            let ff_app = _app.handle().clone();
+            tauri::async_runtime::block_on(async { ff_state.load(&ff_app).await });
+            let flags = tauri::async_runtime::block_on(async { ff_state.flags.read().await.clone() });
 
-            // Atoll notch bridge — push meeting state to macOS notch
-            atoll_bridge::setup_atoll_listener(&_app.handle());
-
-            // Load dictionary and start file watcher
-            let dict_state = _app.state::<dictionary::DictionaryState>().inner().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = dictionary::load_dictionary(&dict_state).await {
-                    log::error!("Failed to load dictionary: {}", e);
-                }
-            });
-            // Keep watcher alive for app lifetime by leaking it
-            match dictionary::start_dictionary_watcher(_app.state::<dictionary::DictionaryState>().inner().clone()) {
-                Ok(watcher) => {
-                    std::mem::forget(watcher);
-                    log::info!("📖 Dictionary file watcher active");
-                }
-                Err(e) => log::error!("Failed to start dictionary watcher: {}", e),
+            // Atoll notch bridge — gated
+            if flags.atoll_bridge_enabled {
+                atoll_bridge::setup_atoll_listener(&_app.handle());
+                log::info!("🔗 Atoll bridge enabled");
             }
 
-            // Load speaker diarization embedding model if present.
-            {
+            // Dictionary — gated
+            if flags.dictionary_enabled {
+                let dict_state = _app.state::<dictionary::DictionaryState>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = dictionary::load_dictionary(&dict_state).await {
+                        log::error!("Failed to load dictionary: {}", e);
+                    }
+                });
+                match dictionary::start_dictionary_watcher(_app.state::<dictionary::DictionaryState>().inner().clone()) {
+                    Ok(watcher) => {
+                        std::mem::forget(watcher);
+                        log::info!("📖 Dictionary file watcher active");
+                    }
+                    Err(e) => log::error!("Failed to start dictionary watcher: {}", e),
+                }
+            }
+
+            // Diarization — gated (heavy ONNX model)
+            if flags.diarization_enabled {
                 let diar_state = _app
                     .state::<Arc<tokio::sync::RwLock<diarization::DiarizationState>>>()
                     .inner()
@@ -674,27 +685,24 @@ pub fn run() {
                 });
             }
 
-            // Initialize system tray
+            // System tray — always needed (core UX)
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);
             }
 
-            // Initialize notification system with proper defaults
+            // Notifications — always init (core UX for recording feedback)
             log::info!("Initializing notification system...");
             let app_for_notif = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let notif_state = app_for_notif.state::<NotificationManagerState<tauri::Wry>>();
                 match notifications::commands::initialize_notification_manager(app_for_notif.clone()).await {
                     Ok(manager) => {
-                        // Set default consent and permissions on first launch
                         if let Err(e) = manager.set_consent(true).await {
                             log::error!("Failed to set initial consent: {}", e);
                         }
                         if let Err(e) = manager.request_permission().await {
                             log::error!("Failed to request initial permission: {}", e);
                         }
-
-                        // Store the initialized manager
                         let mut state_lock = notif_state.write().await;
                         *state_lock = Some(manager);
                         log::info!("Notification system initialized with default permissions");
@@ -711,22 +719,26 @@ pub fn run() {
             // Set meeting-domain prompt directory under app_data_dir/domains/
             meeting_domain::set_domain_directory(&_app.handle());
 
-            // Initialize Whisper engine on startup
-            tauri::async_runtime::spawn(async {
-                if let Err(e) = whisper_engine::commands::whisper_init().await {
-                    log::error!("Failed to initialize Whisper engine on startup: {}", e);
-                }
-            });
+            // Initialize Whisper engine on startup — gated behind preload flag
+            if flags.whisper_preload {
+                tauri::async_runtime::spawn(async {
+                    if let Err(e) = whisper_engine::commands::whisper_init().await {
+                        log::error!("Failed to initialize Whisper engine on startup: {}", e);
+                    }
+                });
+            }
 
             // Set Parakeet models directory
             parakeet_engine::commands::set_models_directory(&_app.handle());
 
-            // Initialize Parakeet engine on startup
-            tauri::async_runtime::spawn(async {
-                if let Err(e) = parakeet_engine::commands::parakeet_init().await {
-                    log::error!("Failed to initialize Parakeet engine on startup: {}", e);
-                }
-            });
+            // Initialize Parakeet engine on startup — gated behind preload flag
+            if flags.parakeet_preload {
+                tauri::async_runtime::spawn(async {
+                    if let Err(e) = parakeet_engine::commands::parakeet_init().await {
+                        log::error!("Failed to initialize Parakeet engine on startup: {}", e);
+                    }
+                });
+            }
 
             // Initialize ModelManager for summary engine (async, non-blocking)
             let app_handle_for_model_manager = _app.handle().clone();
@@ -750,11 +762,13 @@ pub fn run() {
             //     });
             // }
 
-            // Start calendar ICS poller (background sync of subscribed calendar feeds)
-            let cal_state = _app.state::<calendar::CalendarState>().inner().clone();
-            let cal_config = _app.state::<Arc<RwLock<calendar::CalendarConfig>>>().inner().clone();
-            calendar::scheduler::start_calendar_poller(cal_config, cal_state);
-            log::info!("📅 Calendar ICS poller started");
+            // Start calendar ICS poller — gated
+            if flags.calendar_enabled {
+                let cal_state = _app.state::<calendar::CalendarState>().inner().clone();
+                let cal_config = _app.state::<Arc<RwLock<calendar::CalendarConfig>>>().inner().clone();
+                calendar::scheduler::start_calendar_poller(cal_config, cal_state);
+                log::info!("📅 Calendar ICS poller started");
+            }
 
             // Initialize database (handles first launch detection and conditional setup)
             tauri::async_runtime::block_on(async {

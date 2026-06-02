@@ -67,6 +67,7 @@ pub mod distributed_notifications;
 pub mod utils;
 pub mod whisper_engine;
 pub mod key_registry;
+pub mod hotkey;
 pub mod meeting_domain;
 
 use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
@@ -593,6 +594,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(hotkey::plugin())
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
@@ -610,6 +612,9 @@ pub fn run() {
         .manage(Arc::new(RwLock::new(meeting_detect::DetectionConfig::default())))
         .setup(|_app| {
             log::info!("Application setup complete");
+
+            // Global hotkey for start/stop recording (default Cmd+Shift+R).
+            hotkey::init(&_app.handle());
 
             // Atoll notch bridge — push meeting state to macOS notch
             atoll_bridge::setup_atoll_listener(&_app.handle());
@@ -764,6 +769,8 @@ pub fn run() {
             key_registry::registry_has_key,
             key_registry::registry_get_key,
             key_registry::registry_set_key,
+            hotkey::get_recording_hotkey,
+            hotkey::set_recording_hotkey,
             stop_recording,
             is_recording,
             get_transcription_status,

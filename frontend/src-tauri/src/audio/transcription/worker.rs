@@ -146,8 +146,18 @@ pub fn start_transcription_task<R: Runtime>(
                             let chunk_timestamp = chunk.timestamp;
                             let chunk_duration = chunk.data.len() as f64 / chunk.sample_rate as f64;
 
-                            // Keep a copy of audio samples for speaker diarization
-                            let diarization_samples = chunk.data.clone();
+                            // Keep a copy of audio samples for speaker diarization.
+                            // The embedding model assumes 16kHz mono — resample if the
+                            // chunk arrived at a different rate.
+                            let diarization_samples = if chunk.sample_rate != 16000 {
+                                crate::audio::audio_processing::resample_audio(
+                                    &chunk.data,
+                                    chunk.sample_rate,
+                                    16000,
+                                )
+                            } else {
+                                chunk.data.clone()
+                            };
 
                             // Transcribe with provider-agnostic approach
                             match transcribe_chunk_with_provider(

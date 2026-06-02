@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 pub struct Speaker {
     pub id: String,
     pub label: String, // User-assigned name or "Speaker 1"
-    pub embedding: Vec<f32>, // Average embedding vector (192-dim for wespeaker)
+    pub embedding: Vec<f32>, // Average embedding vector (256-dim for wespeaker resnet34-LM)
     pub sample_count: u32, // Number of segments used to compute avg embedding
 }
 

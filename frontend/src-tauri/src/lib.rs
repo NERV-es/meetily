@@ -629,6 +629,34 @@ pub fn run() {
                 Err(e) => log::error!("Failed to start dictionary watcher: {}", e),
             }
 
+            // Load speaker diarization embedding model if present.
+            {
+                let diar_state = _app
+                    .state::<Arc<tokio::sync::RwLock<diarization::DiarizationState>>>()
+                    .inner()
+                    .clone();
+                tauri::async_runtime::spawn(async move {
+                    let model_path = diarization::models_dir()
+                        .join("wespeaker_en_voxceleb_resnet34.onnx");
+                    if model_path.exists() {
+                        match diarization::embeddings::EmbeddingExtractor::new(&model_path) {
+                            Ok(extractor) => {
+                                let mut state = diar_state.write().await;
+                                state.embedder = Some(extractor);
+                                state.config.model_path = Some(model_path);
+                                log::info!("🎤 Speaker diarization enabled (embedding model loaded)");
+                            }
+                            Err(e) => log::error!("Failed to load diarization model: {}", e),
+                        }
+                    } else {
+                        log::info!(
+                            "🎤 Diarization model not found at {} — speaker labels disabled",
+                            model_path.display()
+                        );
+                    }
+                });
+            }
+
             // Initialize system tray
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);

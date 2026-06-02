@@ -64,3 +64,6 @@ cargo build --release -p meetily-mcp 2>/dev/null
 cp target/release/meetily-mcp ~/.local/bin/
 
 echo "✅ Done! Meetily.app installed and meetily-mcp updated."
+
+echo "🎤 Ensuring speaker diarization model is present..."
+"$REPO_DIR/scripts/download-diarization-model.sh" || echo "   ⚠️  Diarization model download failed — speaker labels will be disabled until it's fetched."

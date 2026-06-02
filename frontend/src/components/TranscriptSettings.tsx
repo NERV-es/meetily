@@ -28,6 +28,27 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const [uiProvider, setUiProvider] = useState<TranscriptModelProps['provider']>(transcriptModelConfig.provider);
+    const [registryDetected, setRegistryDetected] = useState<boolean>(false);
+
+    // Check whether the central NERV key registry already has a key for this
+    // provider — drives the "auto-detected, no typing needed" badge (#885).
+    const checkRegistry = async (provider: string) => {
+        try {
+            const detected = await invoke<boolean>('registry_has_key', { provider });
+            setRegistryDetected(detected);
+        } catch {
+            setRegistryDetected(false);
+        }
+    };
+
+    useEffect(() => {
+        const p = transcriptModelConfig.provider;
+        if (p !== 'localWhisper' && p !== 'parakeet') {
+            checkRegistry(p);
+        } else {
+            setRegistryDetected(false);
+        }
+    }, [transcriptModelConfig.provider]);
 
     // Sync uiProvider when backend config changes (e.g., after model selection or initial load)
     useEffect(() => {
@@ -119,6 +140,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     setUiProvider(provider);
                                     if (provider !== 'localWhisper' && provider !== 'parakeet') {
                                         fetchApiKey(provider);
+                                        checkRegistry(provider);
                                     }
                                 }}
                             >
@@ -193,6 +215,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                             <Label className="block text-sm font-medium text-gray-700 mb-1">
                                 API Key
                             </Label>
+                            {registryDetected && (
+                                <p className="text-xs text-green-600 mb-1 mx-1 flex items-center gap-1">
+                                    <span aria-hidden>✓</span>
+                                    Auto-detected from your central key registry — no need to type it.
+                                </p>
+                            )}
                             <div className="relative mx-1">
                                 <Input
                                     type={showApiKey ? "text" : "password"}

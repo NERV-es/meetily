@@ -135,7 +135,10 @@ impl SettingsRepository {
             "SELECT {} FROM settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        let api_key: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        // Fallback to the central NERV key registry (shared macOS Keychain) so
+        // the user never has to retype a key already configured in another app.
+        let api_key = crate::key_registry::resolve(provider, api_key);
         Ok(api_key)
     }
 
@@ -229,7 +232,10 @@ impl SettingsRepository {
             "SELECT {} FROM transcript_settings WHERE id = '1' LIMIT 1",
             api_key_column
         );
-        let api_key = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        let api_key: Option<String> = sqlx::query_scalar(&query).fetch_optional(pool).await?;
+        // Central NERV registry fallback (shared Keychain) — auto-detect keys
+        // configured in other apps (VoiceInk/MacWhisper) without retyping.
+        let api_key = crate::key_registry::resolve(provider, api_key);
         Ok(api_key)
     }
 

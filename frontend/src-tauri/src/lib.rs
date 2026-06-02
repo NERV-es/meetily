@@ -66,6 +66,7 @@ pub mod tray;
 pub mod distributed_notifications;
 pub mod utils;
 pub mod whisper_engine;
+pub mod key_registry;
 pub mod meeting_domain;
 
 use audio::{list_audio_devices, AudioDevice, trigger_audio_permission};
@@ -759,6 +760,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_recording,
+            key_registry::registry_status,
+            key_registry::registry_has_key,
+            key_registry::registry_get_key,
+            key_registry::registry_set_key,
             stop_recording,
             is_recording,
             get_transcription_status,

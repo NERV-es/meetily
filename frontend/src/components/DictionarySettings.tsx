@@ -47,7 +47,7 @@ export function DictionarySettings() {
   }, []);
 
   useEffect(() => {
-    if (open) refresh();
+    if (open) void refresh();
   }, [open, refresh]);
 
   const parseAliases = (raw: string): string[] =>

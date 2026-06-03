@@ -172,12 +172,12 @@ pub fn start_transcription_task<R: Runtime>(
                             )
                             .await
                             {
-                                Ok((transcript, confidence_opt, is_partial)) => {
-                                    // Provider-aware confidence threshold
-                                    let confidence_threshold = match &engine_clone {
-                                        TranscriptionEngine::Whisper(_) | TranscriptionEngine::Provider(_) => 0.3,
-                                        TranscriptionEngine::Parakeet(_) => 0.0, // Parakeet has no confidence, accept all
-                                    };
+                                Ok((transcript, confidence_opt, is_partial, confidence_threshold)) => {
+                                    // Confidence threshold belongs to whichever
+                                    // engine actually produced this transcript
+                                    // (primary or a fallback), returned alongside
+                                    // the result so we never grade a fallback's
+                                    // output against the primary engine's bar.
 
                                     let confidence_str = match confidence_opt {
                                         Some(c) => format!("{:.2}", c),
@@ -510,15 +510,30 @@ pub fn start_transcription_task<R: Runtime>(
     })
 }
 
+/// Minimum confidence to accept a transcript, per engine family. Parakeet
+/// reports no confidence, so all of its output is accepted (0.0); Whisper and
+/// generic providers gate at 0.3. Exposed so callers can apply the threshold of
+/// whichever engine actually produced a result (which may be a fallback, not
+/// the primary) rather than assuming the primary's threshold.
+fn confidence_threshold(engine: &TranscriptionEngine) -> f32 {
+    match engine {
+        TranscriptionEngine::Whisper(_) | TranscriptionEngine::Provider(_) => 0.3,
+        TranscriptionEngine::Parakeet(_) => 0.0,
+    }
+}
+
 /// Transcribe audio chunk using the primary provider, falling back to other
 /// loaded engines on failure before giving up.
-/// Returns: (text, confidence Option, is_partial)
+/// Returns: (text, confidence Option, is_partial, confidence_threshold) where
+/// the threshold belongs to the engine that actually produced the transcript
+/// (primary or fallback), so downstream gating is never graded against the
+/// wrong engine's bar.
 async fn transcribe_chunk_with_provider<R: Runtime>(
     engine: &TranscriptionEngine,
     fallbacks: &[TranscriptionEngine],
     chunk: AudioChunk,
     app: &AppHandle<R>,
-) -> std::result::Result<(String, Option<f32>, bool), TranscriptionError> {
+) -> std::result::Result<(String, Option<f32>, bool, f32), TranscriptionError> {
     // Convert to 16kHz mono for transcription
     let transcription_data = if chunk.sample_rate != 16000 {
         crate::audio::audio_processing::resample_audio(&chunk.data, chunk.sample_rate, 16000)
@@ -558,10 +573,15 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
     let chunk_id = chunk.chunk_id;
     let primary_name = engine.provider_name().to_string();
 
-    match run_single_engine(engine, speech_samples.clone(), chunk_id).await {
-        Ok(result) => return Ok(result),
-        Err(primary_err) => {
-            if fallbacks.is_empty() {
+    // Fast path: no fallback engines loaded. Move the (potentially large) audio
+    // buffer straight into the primary attempt — no clone on the hot path — and
+    // return its result (or surface the error) directly.
+    if fallbacks.is_empty() {
+        return match run_single_engine(engine, speech_samples, chunk_id).await {
+            Ok((text, conf, partial)) => {
+                Ok((text, conf, partial, confidence_threshold(engine)))
+            }
+            Err(primary_err) => {
                 error!(
                     "{} transcription failed for chunk {} (no fallback engines): {}",
                     primary_name, chunk_id, primary_err
@@ -574,9 +594,16 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                         "actionable": false
                     }),
                 );
-                return Err(primary_err);
+                Err(primary_err)
             }
+        };
+    }
 
+    // Fallbacks exist: keep `speech_samples` intact for them and hand the
+    // primary attempt its own clone.
+    match run_single_engine(engine, speech_samples.clone(), chunk_id).await {
+        Ok((text, conf, partial)) => return Ok((text, conf, partial, confidence_threshold(engine))),
+        Err(primary_err) => {
             warn!(
                 "⚠️ {} failed for chunk {} ({}). Trying {} fallback engine(s)...",
                 primary_name,
@@ -589,7 +616,7 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
             for fb in fallbacks {
                 let fb_name = fb.provider_name().to_string();
                 match run_single_engine(fb, speech_samples.clone(), chunk_id).await {
-                    Ok(result) => {
+                    Ok((text, conf, partial)) => {
                         info!(
                             "✅ Fallback engine '{}' recovered chunk {} after '{}' failed",
                             fb_name, chunk_id, primary_name
@@ -603,7 +630,11 @@ async fn transcribe_chunk_with_provider<R: Runtime>(
                                 "fallback": fb_name,
                             }),
                         );
-                        return Ok(result);
+                        // Grade the result against the FALLBACK engine's
+                        // threshold — not the primary's — so e.g. a Whisper
+                        // fallback under a Parakeet primary isn't waved through
+                        // (or wrongly rejected) by the wrong engine's bar.
+                        return Ok((text, conf, partial, confidence_threshold(fb)));
                     }
                     Err(e) => {
                         warn!(

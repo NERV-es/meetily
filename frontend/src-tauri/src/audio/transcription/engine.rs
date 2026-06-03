@@ -11,7 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 // TRANSCRIPTION ENGINE ENUM
 // ============================================================================
 
-// Transcription engine abstraction to support multiple providers
+// Transcription engine abstraction to support multiple providers.
+// Arc fields make every variant cheaply cloneable, so a derived Clone is
+// correct and removes the hand-written impl that had to be kept in sync by hand.
+#[derive(Clone)]
 pub enum TranscriptionEngine {
     Whisper(Arc<crate::whisper_engine::WhisperEngine>),  // Direct access (backward compat)
     Parakeet(Arc<crate::parakeet_engine::ParakeetEngine>), // Direct access (backward compat)
@@ -43,16 +46,6 @@ impl TranscriptionEngine {
             Self::Whisper(_) => "Whisper (direct)",
             Self::Parakeet(_) => "Parakeet (direct)",
             Self::Provider(provider) => provider.provider_name(),
-        }
-    }
-}
-
-impl Clone for TranscriptionEngine {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Whisper(e) => Self::Whisper(e.clone()),
-            Self::Parakeet(e) => Self::Parakeet(e.clone()),
-            Self::Provider(p) => Self::Provider(p.clone()),
         }
     }
 }

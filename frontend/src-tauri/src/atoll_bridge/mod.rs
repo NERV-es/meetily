@@ -33,9 +33,17 @@ async fn rpc_call(method: &str, params: Value) -> Result<Value, String> {
         .await
         .map_err(|e| format!("Atoll WS connect failed: {}", e))?;
 
+    // Per-request unique id so a stray server notification can't be mistaken
+    // for this call's reply. Still a JSON string (Atoll rejects integer ids).
+    let req_id = {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static RPC_SEQ: AtomicU64 = AtomicU64::new(1);
+        RPC_SEQ.fetch_add(1, Ordering::Relaxed).to_string()
+    };
+
     let payload = json!({
         "jsonrpc": "2.0",
-        "id": "1",            // MUST be a string — see protocol notes above
+        "id": req_id,         // MUST be a string — see protocol notes above
         "method": method,
         "params": params
     });
@@ -44,15 +52,35 @@ async fn rpc_call(method: &str, params: Value) -> Result<Value, String> {
         .await
         .map_err(|e| format!("Atoll WS send failed: {}", e))?;
 
-    // Read the reply so we (a) surface RPC errors and (b) guarantee the request
-    // is processed before the connection closes (auth must land before present).
-    let reply = match ws.next().await {
-        Some(Ok(Message::Text(txt))) => {
-            serde_json::from_str::<Value>(&txt).unwrap_or(Value::Null)
+    // Read frames until we get the response matching our request id. Any
+    // server-initiated notification (no id / mismatched id) is skipped rather
+    // than consumed as our reply. A read timeout prevents an unresponsive Atoll
+    // from hanging the spawned task indefinitely.
+    const RPC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+    let reply = loop {
+        let frame = tokio::time::timeout(RPC_TIMEOUT, ws.next())
+            .await
+            .map_err(|_| "Atoll RPC timed out waiting for reply".to_string())?;
+        match frame {
+            Some(Ok(Message::Text(txt))) => {
+                let v: Value = serde_json::from_str(&txt)
+                    .map_err(|e| format!("Atoll RPC reply was not valid JSON: {}", e))?;
+                // Skip notifications / unrelated frames; only accept our id.
+                match v.get("id").and_then(|id| id.as_str()) {
+                    Some(id) if id == req_id => break v,
+                    _ => continue,
+                }
+            }
+            Some(Ok(Message::Close(_))) | None => {
+                ws.close(None).await.ok();
+                return Err("Atoll WS closed before sending a reply".to_string());
+            }
+            Some(Ok(_)) => continue, // ping/pong/binary — ignore
+            Some(Err(e)) => {
+                ws.close(None).await.ok();
+                return Err(format!("Atoll WS recv failed: {}", e));
+            }
         }
-        Some(Ok(_)) => Value::Null,
-        Some(Err(e)) => return Err(format!("Atoll WS recv failed: {}", e)),
-        None => Value::Null,
     };
 
     ws.close(None).await.ok();

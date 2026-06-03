@@ -1,4 +1,4 @@
-name: Trivy Container Scan
+name: Trivy Vulnerability Scan
 
 on:
   push:

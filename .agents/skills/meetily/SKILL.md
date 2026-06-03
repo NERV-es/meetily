@@ -62,6 +62,7 @@ This skill teaches the core development patterns and conventions used in the `me
    ```
 
 ### Testing Workflow
+
 **Trigger:** When writing or running tests
 **Command:** `/run-tests`
 
@@ -73,10 +74,11 @@ This skill teaches the core development patterns and conventions used in the `me
 
 - Test files follow the pattern: `*.test.*`
   - Example: `userService.test.ts`
-- Place tests alongside the modules they cover or in a dedicated test directory.
+- Place tests in a dedicated test directory (e.g., `tests/` or `__tests__/`), mirroring the source structure.
 - Use the project's test runner to execute tests. (Framework is unspecified; check project scripts.)
 
 ## Commands
+
 | Command               | Purpose                                         |
 |-----------------------|-------------------------------------------------|
 | /conventional-commit  | Guide for writing conventional commit messages  |

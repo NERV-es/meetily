@@ -62,6 +62,7 @@ This skill teaches the core development patterns and conventions used in the `me
    ```
 
 ### Testing Workflow
+
 **Trigger:** When writing or running tests
 **Command:** `/run-tests`
 
@@ -77,6 +78,7 @@ This skill teaches the core development patterns and conventions used in the `me
 - Use the project's test runner to execute tests. (Framework is unspecified; check project scripts.)
 
 ## Commands
+
 | Command               | Purpose                                         |
 |-----------------------|-------------------------------------------------|
 | /conventional-commit  | Guide for writing conventional commit messages  |

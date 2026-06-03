@@ -11,9 +11,10 @@ cask "meetily" do
   # Only Apple Silicon builds are published.
   depends_on arch: :arm64
   depends_on macos: :sonoma
-
+  # Built with MACOSX_DEPLOYMENT_TARGET=14.2, requires Sonoma 14.2+
+  depends_on macos: ">= :sonoma"
   app "meetily.app"
-
+  app "Meetily.app"
   zap trash: [
     "~/Library/Application Support/com.meetily.ai",
     "~/Library/Application Support/meetily",
@@ -28,6 +29,6 @@ cask "meetily" do
     Meetily is an Apple Silicon-only build signed ad-hoc for personal use.
     On first launch macOS Gatekeeper may block it — right-click the app and
     choose Open, or run:
-      xattr -dr com.apple.quarantine "#{appdir}/meetily.app"
+      xattr -dr com.apple.quarantine "#{appdir}/Meetily.app"
   EOS
 end

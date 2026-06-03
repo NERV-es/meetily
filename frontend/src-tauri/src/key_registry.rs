@@ -147,13 +147,13 @@ pub fn resolve(provider: &str, existing: Option<String>) -> Option<String> {
 /// Returns which providers have a key in the central registry — drives
 /// zero-typing UI (show "✓ detected" badges, prefill dropdowns).
 #[tauri::command]
-pub async fn registry_status() -> RegistryStatus {
-    for &provider in KNOWN_PROVIDERS {
+pub fn registry_status() -> RegistryStatus {
     let providers = KNOWN_PROVIDERS
         .iter()
-        .filter(|p| has_key(p))
-        .map(|p| p.to_string())
+        .filter(|&&p| has_key(p))
+        .map(|&p| p.to_string())
         .collect();
+    RegistryStatus { providers }
 }
 
 /// True/false whether a single provider has a key available centrally.

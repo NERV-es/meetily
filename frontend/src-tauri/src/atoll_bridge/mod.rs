@@ -95,12 +95,19 @@ async fn rpc_call(method: &str, params: Value) -> Result<Value, String> {
 
 /// Ensure Atoll has authorized this bundle (idempotent, persists server-side).
 async fn ensure_authorized() -> Result<(), String> {
+    static AUTHORIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if AUTHORIZED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Ok(());
+    }
     rpc_call(
         "atoll.requestAuthorization",
         json!({ "bundleIdentifier": BUNDLE_ID }),
     )
     .await
-    .map(|_| ())
+    .map(|_| {
+        AUTHORIZED.store(true, std::sync::atomic::Ordering::Relaxed);
+        ()
+    })
 }
 
 /// Build a minimal-but-valid AtollNotchExperienceDescriptor for a meeting,

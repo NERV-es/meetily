@@ -29,15 +29,23 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const [uiProvider, setUiProvider] = useState<TranscriptModelProps['provider']>(transcriptModelConfig.provider);
     const [registryDetected, setRegistryDetected] = useState<boolean>(false);
+    const [activeRegistryCheck, setActiveRegistryCheck] = useState<string | null>(null);
 
     // Check whether the central NERV key registry already has a key for this
     // provider — drives the "auto-detected, no typing needed" badge (#885).
     const checkRegistry = async (provider: string) => {
+        setActiveRegistryCheck(provider);
         try {
             const detected = await invoke<boolean>('registry_has_key', { provider });
-            setRegistryDetected(detected);
+            // Only update state if this is still the active provider
+            setActiveRegistryCheck((current) => {
+                if (current === provider) {
+                    setRegistryDetected(detected);
+                }
+                return current === provider ? null : current;
+            });
         } catch {
-            setRegistryDetected(false);
+            setActiveRegistryCheck(null);
         }
     };
 

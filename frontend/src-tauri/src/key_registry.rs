@@ -76,14 +76,11 @@ pub fn get_key(_provider: &str) -> Option<String> {
 /// Write/update a key in the central registry so all NERV apps see it.
 #[cfg(target_os = "macos")]
 pub fn set_key(provider: &str, value: &str) -> Result<(), String> {
-    use std::process::Command;
+    use std::process::{Command, Stdio};
+    use std::io::Write;
     if value.is_empty() {
         return Err("empty value".into());
     }
-    let account = canonical(provider);
-    let label = format!("NERV key: {}", account);
-    use std::process::{Command, Stdio};
-    use std::io::Write;
     let account = canonical(provider);
     let label = format!("NERV key: {}", account);
     
@@ -151,10 +148,10 @@ pub fn resolve(provider: &str, existing: Option<String>) -> Option<String> {
 /// zero-typing UI (show "✓ detected" badges, prefill dropdowns).
 #[tauri::command]
 pub async fn registry_status() -> RegistryStatus {
-    let mut providers = Vec::new();
+pub fn registry_status() -> RegistryStatus {
     for &provider in KNOWN_PROVIDERS {
         if has_key(provider).await {
-            providers.push(provider.to_string());
+        if has_key(provider) {
         }
     }
     RegistryStatus { providers }

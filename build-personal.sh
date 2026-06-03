@@ -12,4 +12,6 @@ fi
 export TAURI_SIGNING_PRIVATE_KEY="$(cat "${KEY_FILE}")"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 
-exec ./build-and-install.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+exec "${SCRIPT_DIR}/build-and-install.sh"

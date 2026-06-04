@@ -50,6 +50,10 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const fetchApiKey = async (provider: string) => {
         try {
 
+            // Clear API key state immediately when switching providers
+            setApiKey(null);
+            setSavedApiKey(null);
+
             const data = await invoke('api_get_transcript_api_key', { provider }) as string;
 
             setApiKey(data || '');
@@ -67,7 +71,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     };
 
     // Persist the key (and current provider/model) to the backend store.
-    const handleSaveApiKey = async () => {
+    const handleSaveApiKey = async (): Promise<void> => {
         const trimmed = (apiKey || '').trim();
         if (!trimmed) {
             setSaveState('error');
@@ -78,7 +82,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         setSaveError(null);
         try {
             await invoke('api_save_transcript_config', {
-                provider: transcriptModelConfig.provider,
+                provider: uiProvider,
                 model: transcriptModelConfig.model,
                 apiKey: trimmed,
             });
@@ -97,7 +101,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     };
 
     // Validate the key against the provider without uploading audio.
-    const handleTestApiKey = async () => {
+    const handleTestApiKey = async (): Promise<void> => {
         const trimmed = (apiKey || '').trim();
         if (!trimmed) {
             setTestState('error');
@@ -108,7 +112,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
         setTestMessage(null);
         try {
             const result = await invoke('api_test_transcript_api_key', {
-                provider: transcriptModelConfig.provider,
+                provider: uiProvider,
                 apiKey: trimmed,
             }) as { status?: string; message?: string };
             setTestState('success');

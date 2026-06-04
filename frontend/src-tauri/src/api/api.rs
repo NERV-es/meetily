@@ -757,10 +757,9 @@ pub async fn api_test_transcript_api_key<R: Runtime>(
         "elevenLabs" => client
             .get("https://api.elevenlabs.io/v1/user")
             .header("xi-api-key", key.clone()),
-        "gemini" => client.get(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models?key={}",
-            key
-        )),
+        "gemini" => client
+            .get("https://generativelanguage.googleapis.com/v1beta/models")
+            .header("x-goog-api-key", key.clone()),
         "cartesia" => client
             .get("https://api.cartesia.ai/voices")
             .header("X-API-Key", key.clone())
@@ -791,10 +790,11 @@ pub async fn api_test_transcript_api_key<R: Runtime>(
             } else if status.as_u16() == 401 || status.as_u16() == 403 {
                 Err("Invalid API key (authentication failed)".to_string())
             } else if status.as_u16() == 429 {
-                // Auth succeeded but rate limited — key is structurally valid.
+                // Rate limited - we cannot confirm authentication.
+                log_warn!("Provider '{}' returned HTTP 429 (rate limited)", &provider);
                 Ok(serde_json::json!({
-                    "status": "success",
-                    "message": "API key accepted (rate limited, but authenticated)"
+                    "status": "warning",
+                    "message": "Rate limited - unable to verify authentication"
                 }))
             } else {
                 let body = response.text().await.unwrap_or_default();

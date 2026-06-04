@@ -183,6 +183,10 @@ impl SettingsRepository {
             "appleSpeech" => return Ok(()), // Apple Speech doesn't need an API key
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
+            "assemblyai" => "assemblyaiApiKey",
+            "gemini" => "geminiApiKey",
+            "cartesia" => "cartesiaApiKey",
+            "speechmatics" => "speechmaticsApiKey",
             "groq" => "groqApiKey",
             "openai" => "openaiApiKey",
             _ => {
@@ -217,6 +221,10 @@ impl SettingsRepository {
             "deepgram" => "deepgramApiKey",
             "elevenLabs" => "elevenLabsApiKey",
             "groq" => "groqApiKey",
+            "assemblyai" => "assemblyaiApiKey",
+            "gemini" => "geminiApiKey",
+            "cartesia" => "cartesiaApiKey",
+            "speechmatics" => "speechmaticsApiKey",
             "openai" => "openaiApiKey",
             _ => {
                 return Err(sqlx::Error::Protocol(

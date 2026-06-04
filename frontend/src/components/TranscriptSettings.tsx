@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
-import { Eye, EyeOff, Lock, Unlock } from 'lucide-react';
+import { Eye, EyeOff, Lock, Unlock, Check, X, Loader2, Save } from 'lucide-react';
 import { ModelManager } from './WhisperModelManager';
 import { ParakeetModelManager } from './ParakeetModelManager';
 import { MeetingDomainSettings } from './MeetingDomainSettings';
@@ -29,6 +29,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const [isApiKeyLocked, setIsApiKeyLocked] = useState<boolean>(true);
     const [isLockButtonVibrating, setIsLockButtonVibrating] = useState<boolean>(false);
     const [uiProvider, setUiProvider] = useState<TranscriptModelProps['provider']>(transcriptModelConfig.provider);
+    // Tracks the last-saved key so the UI can show whether there are unsaved edits.
+    const [savedApiKey, setSavedApiKey] = useState<string | null>(transcriptModelConfig.apiKey || null);
+    const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const [testState, setTestState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+    const [testMessage, setTestMessage] = useState<string | null>(null);
     const [registryDetected, setRegistryDetected] = useState<boolean>(false);
     const [activeRegistryCheck, setActiveRegistryCheck] = useState<string | null>(null);
 
@@ -76,12 +82,78 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     const fetchApiKey = async (provider: string) => {
         try {
 
+            // Clear API key state immediately when switching providers
+            setApiKey(null);
+            setSavedApiKey(null);
+
+            setApiKey('');
+            setSavedApiKey('');
             const data = await invoke('api_get_transcript_api_key', { provider }) as string;
 
             setApiKey(data || '');
+            setSavedApiKey(data || '');
         } catch (err) {
             console.error('Error fetching API key:', err);
             setApiKey(null);
+            setSavedApiKey(null);
+        }
+        // Reset transient UI feedback when switching providers / reloading the key.
+        setSaveState('idle');
+        setSaveError(null);
+        setTestState('idle');
+        setTestMessage(null);
+    };
+
+    // Persist the key (and current provider/model) to the backend store.
+    const handleSaveApiKey = async (): Promise<void> => {
+        const trimmed = (apiKey || '').trim();
+        if (!trimmed) {
+            setSaveState('error');
+            setSaveError('API key is empty');
+            return;
+        }
+        setSaveState('saving');
+        setSaveError(null);
+        try {
+            await invoke('api_save_transcript_config', {
+                provider: uiProvider,
+                model: transcriptModelConfig.model,
+                apiKey: trimmed,
+            });
+            // Keep the in-memory config in sync so other components see the key.
+            setTranscriptModelConfig({ provider: uiProvider, model: transcriptModelConfig.model, apiKey: trimmed });
+            setSaveState('saved');
+            setIsApiKeyLocked(true);
+            // Re-arm the "saved" badge after a moment.
+            setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 2500);
+        } catch (err) {
+            console.error('Error saving API key:', err);
+            setSaveState('error');
+            setSaveError(typeof err === 'string' ? err : 'Failed to save API key');
+        }
+    };
+
+    // Validate the key against the provider without uploading audio.
+    const handleTestApiKey = async (): Promise<void> => {
+        const trimmed = (apiKey || '').trim();
+        if (!trimmed) {
+            setTestState('error');
+            setTestMessage('Enter an API key first');
+            return;
+        }
+        setTestState('testing');
+        setTestMessage(null);
+        try {
+            const result = await invoke('api_test_transcript_api_key', {
+                provider: uiProvider,
+                apiKey: trimmed,
+            }) as { status?: string; message?: string };
+            setTestState('success');
+            setTestMessage(result?.message || 'API key is valid');
+        } catch (err) {
+            console.error('API key test failed:', err);
+            setTestState('error');
+            setTestMessage(typeof err === 'string' ? err : 'API key validation failed');
         }
     };
     const modelOptions = {
@@ -106,11 +178,8 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
     };
 
     const handleWhisperModelSelect = (modelName: string) => {
-        // Always update config when model is selected, regardless of current provider
-        // This ensures the model is set when user switches back
         setTranscriptModelConfig({
-            ...transcriptModelConfig,
-            provider: 'localWhisper', // Ensure provider is set correctly
+            provider: 'localWhisper',
             model: modelName
         });
         // Close modal after selection
@@ -121,10 +190,8 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
 
     const handleParakeetModelSelect = (modelName: string) => {
         // Always update config when model is selected, regardless of current provider
-        // This ensures the model is set when user switches back
         setTranscriptModelConfig({
-            ...transcriptModelConfig,
-            provider: 'parakeet', // Ensure provider is set correctly
+            provider: 'parakeet',
             model: modelName
         });
         // Close modal after selection
@@ -178,7 +245,7 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     value={transcriptModelConfig.model}
                                     onValueChange={(value) => {
                                         const model = value as TranscriptModelProps['model'];
-                                        setTranscriptModelConfig({ ...transcriptModelConfig, provider: uiProvider, model });
+                                        setTranscriptModelConfig({ provider: uiProvider, model, apiKey: transcriptModelConfig.apiKey });
                                     }}
                                 >
                                     <SelectTrigger className='focus:ring-1 focus:ring-blue-500 focus:border-blue-500'>
@@ -243,7 +310,12 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     className={`pr-24 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${isApiKeyLocked ? 'bg-gray-100 cursor-not-allowed' : ''
                                         }`}
                                     value={apiKey || ''}
-                                    onChange={(e) => setApiKey(e.target.value)}
+                                    onChange={(e) => {
+                                        setApiKey(e.target.value);
+                                        // Editing invalidates any prior test/save feedback.
+                                        if (testState !== 'idle') { setTestState('idle'); setTestMessage(null); }
+                                        if (saveState === 'saved' || saveState === 'error') { setSaveState('idle'); setSaveError(null); }
+                                    }}
                                     disabled={isApiKeyLocked}
                                     onClick={handleInputClick}
                                     placeholder="Enter your API key"
@@ -276,6 +348,65 @@ export function TranscriptSettings({ transcriptModelConfig, setTranscriptModelCo
                                     </Button>
                                 </div>
                             </div>
+
+                            {/* Action row: Test + Save with explicit status feedback */}
+                            <div className="flex items-center gap-2 mx-1 mt-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleTestApiKey}
+                                    disabled={isApiKeyLocked || testState === 'testing' || !(apiKey || '').trim()}
+                                    className="flex items-center gap-1.5"
+                                    title="Validate the key against the provider without uploading audio"
+                                >
+                                    {testState === 'testing'
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <Check className="h-4 w-4" />}
+                                    {testState === 'testing' ? 'Testing…' : 'Test'}
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleSaveApiKey}
+                                    disabled={isApiKeyLocked || saveState === 'saving' || !(apiKey || '').trim()}
+                                    className="flex items-center gap-1.5"
+                                >
+                                    {saveState === 'saving'
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <Save className="h-4 w-4" />}
+                                    {saveState === 'saving' ? 'Saving…' : 'Save'}
+                                </Button>
+
+                                {/* Unsaved-changes hint */}
+                                {!isApiKeyLocked && (apiKey || '').trim() !== (savedApiKey || '').trim() && saveState === 'idle' && (
+                                    <span className="text-xs text-amber-600">Unsaved changes</span>
+                                )}
+                            </div>
+
+                            {/* Save status */}
+                            {saveState === 'saved' && (
+                                <p className="flex items-center gap-1 mx-1 mt-1.5 text-xs text-green-600">
+                                    <Check className="h-3.5 w-3.5" /> API key saved
+                                </p>
+                            )}
+                            {saveState === 'error' && saveError && (
+                                <p className="flex items-center gap-1 mx-1 mt-1.5 text-xs text-red-600">
+                                    <X className="h-3.5 w-3.5" /> {saveError}
+                                </p>
+                            )}
+
+                            {/* Test status */}
+                            {testState === 'success' && (
+                                <p className="flex items-center gap-1 mx-1 mt-1.5 text-xs text-green-600">
+                                    <Check className="h-3.5 w-3.5" /> {testMessage || 'API key is valid'}
+                                </p>
+                            )}
+                            {testState === 'error' && (
+                                <p className="flex items-center gap-1 mx-1 mt-1.5 text-xs text-red-600">
+                                    <X className="h-3.5 w-3.5" /> {testMessage || 'API key validation failed'}
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>

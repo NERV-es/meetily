@@ -713,6 +713,99 @@ pub async fn api_get_transcript_api_key<R: Runtime>(
     }
 }
 
+/// Lightweight validation of a transcription provider API key.
+/// Hits a cheap authenticated endpoint per provider (usually a models/list or
+/// account endpoint) and reports whether the key is accepted, WITHOUT uploading
+/// any audio. Returns { status, message } on success or an Err(string) on failure.
+#[tauri::command]
+pub async fn api_test_transcript_api_key<R: Runtime>(
+    _app: AppHandle<R>,
+    provider: String,
+    api_key: String,
+    _auth_token: Option<String>,
+) -> Result<serde_json::Value, String> {
+    log_info!(
+        "api_test_transcript_api_key called (native) for provider '{}'",
+        &provider
+    );
+
+    let key = api_key.trim().to_string();
+    if key.is_empty() {
+        return Err("API key is empty".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // (url, auth header value, optional second header) per provider.
+    // We use GET on a lightweight authenticated endpoint where possible.
+    let request = match provider.as_str() {
+        "openai" => client
+            .get("https://api.openai.com/v1/models")
+            .header("Authorization", format!("Bearer {}", key)),
+        "groq" => client
+            .get("https://api.groq.com/openai/v1/models")
+            .header("Authorization", format!("Bearer {}", key)),
+        "deepgram" => client
+            .get("https://api.deepgram.com/v1/projects")
+            .header("Authorization", format!("Token {}", key)),
+        "assemblyai" => client
+            .get("https://api.assemblyai.com/v2/transcript?limit=1")
+            .header("Authorization", key.clone()),
+        "elevenLabs" => client
+            .get("https://api.elevenlabs.io/v1/user")
+            .header("xi-api-key", key.clone()),
+        "gemini" => client.get(format!(
+            "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+            key
+        )),
+        "cartesia" => client
+            .get("https://api.cartesia.ai/voices")
+            .header("X-API-Key", key.clone())
+            .header("Cartesia-Version", "2024-06-10"),
+        "speechmatics" => client
+            .get("https://asr.api.speechmatics.com/v2/jobs?limit=1")
+            .header("Authorization", format!("Bearer {}", key)),
+        other => {
+            return Err(format!(
+                "Validation is not supported for provider '{}'",
+                other
+            ));
+        }
+    };
+
+    match request.send().await {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                log_info!(
+                    "✅ Transcript API key validated for provider '{}'",
+                    &provider
+                );
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "message": "API key is valid"
+                }))
+            } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                Err("Invalid API key (authentication failed)".to_string())
+            } else if status.as_u16() == 429 {
+                // Auth succeeded but rate limited — key is structurally valid.
+                Ok(serde_json::json!({
+                    "status": "success",
+                    "message": "API key accepted (rate limited, but authenticated)"
+                }))
+            } else {
+                let body = response.text().await.unwrap_or_default();
+                let snippet: String = body.chars().take(180).collect();
+                Err(format!("Provider returned HTTP {}: {}", status, snippet))
+            }
+        }
+        Err(e) => Err(format!("Request failed: {}", e)),
+    }
+}
+
 #[tauri::command]
 pub async fn api_delete_api_key<R: Runtime>(
     _app: AppHandle<R>,

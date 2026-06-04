@@ -202,6 +202,7 @@ impl SettingsRepository {
         pool: &SqlitePool,
         provider: &str,
         api_key: &str,
+        // Validate provider to prevent SQL injection
     ) -> std::result::Result<(), sqlx::Error> {
         let api_key_column = match provider {
             "localWhisper" => "whisperApiKey",
@@ -219,10 +220,11 @@ impl SettingsRepository {
                 return Err(sqlx::Error::Protocol(
                     format!("Invalid provider: {}", provider).into(),
                 ))
-            }
-        // Use parameterized query with validated column name
-        sqlx::query(
+        };
 
+        // Use parameterized query with validated column name
+        // Use parameterized query with validated column name
+            r#"
             INSERT INTO transcript_settings (id, provider, model, whisperApiKey, deepgramApiKey, elevenLabsApiKey, groqApiKey, openaiApiKey, assemblyaiApiKey, geminiApiKey, cartesiaApiKey, speechmaticsApiKey)
             VALUES ('1', 'parakeet', $2,
                     CASE WHEN $3 = 'localWhisper' THEN $1 ELSE NULL END,
@@ -234,7 +236,7 @@ impl SettingsRepository {
                     CASE WHEN $3 = 'gemini' THEN $1 ELSE NULL END,
                     CASE WHEN $3 = 'cartesia' THEN $1 ELSE NULL END,
                     CASE WHEN $3 = 'speechmatics' THEN $1 ELSE NULL END)
-            INSERT INTO transcript_settings (id, provider, model, "{}")
+                speechmaticsApiKey = CASE WHEN $3 = 'speechmatics' THEN $1 ELSE speechmaticsApiKey END
                 whisperApiKey = CASE WHEN $3 = 'localWhisper' THEN $1 ELSE whisperApiKey END,
                 deepgramApiKey = CASE WHEN $3 = 'deepgram' THEN $1 ELSE deepgramApiKey END,
                 elevenLabsApiKey = CASE WHEN $3 = 'elevenLabs' THEN $1 ELSE elevenLabsApiKey END,
@@ -244,14 +246,13 @@ impl SettingsRepository {
                 geminiApiKey = CASE WHEN $3 = 'gemini' THEN $1 ELSE geminiApiKey END,
                 cartesiaApiKey = CASE WHEN $3 = 'cartesia' THEN $1 ELSE cartesiaApiKey END,
                 speechmaticsApiKey = CASE WHEN $3 = 'speechmatics' THEN $1 ELSE speechmaticsApiKey END
-            ON CONFLICT(id) DO UPDATE SET
+            "#,
+        )
         )
         .bind(api_key)
         .bind(crate::config::DEFAULT_PARAKEET_MODEL)
         .bind(provider)
         .execute(pool)
-        .await?;
-        );
         sqlx::query(&query).bind(api_key).execute(pool).await?;
 
         // #885: mirror into the central NERV keychain registry (best-effort).

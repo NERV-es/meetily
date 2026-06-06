@@ -1,15 +1,17 @@
 # Org-standard policy workflow — thin caller for the shared reusable in
 # NERV-es/.github. Byte-identical across every NERV-es fork.
-name: Typos
+name: CI Optimizer
 
 on:
+  push:
   pull_request:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
-  typos:
-    uses: NERV-es/.github/.github/workflows/typos-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
+  optimize:
+    uses: NERV-es/.github/.github/workflows/ci-optimizer-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
     secrets: inherit

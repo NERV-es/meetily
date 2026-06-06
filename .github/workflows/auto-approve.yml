@@ -1,0 +1,14 @@
+# Org-standard policy workflow — thin caller for the shared reusable in
+# NERV-es/.github. Byte-identical across every NERV-es fork. Triggers live
+# here; logic lives in the SHA-pinned reusable. Do not edit logic here.
+name: Auto Approve Dependabot
+
+on: pull_request_target
+
+permissions:
+  pull-requests: write
+
+jobs:
+  auto-approve:
+    uses: NERV-es/.github/.github/workflows/auto-approve-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
+    secrets: inherit

@@ -110,11 +110,24 @@ pub async fn load_recording_preferences<R: Runtime>(
         match serde_json::from_value::<RecordingPreferences>(value.clone()) {
             Ok(mut p) => {
                 info!("Loaded recording preferences from store");
-                // Update macOS backend to current value if needed
+                // Honor the persisted backend choice: if the saved value parses,
+                // apply it to the runtime config and normalize the stored id.
+                // Otherwise fall back to the current runtime backend. Overwriting
+                // the stored value unconditionally would discard the user's choice
+                // on the first load after restart (runtime starts from the default).
                 #[cfg(target_os = "macos")]
                 {
-                    let backend = crate::audio::capture::get_current_backend();
-                    p.system_audio_backend = Some(backend.to_string());
+                    if let Some(saved_backend) = p
+                        .system_audio_backend
+                        .as_deref()
+                        .and_then(AudioCaptureBackend::from_string)
+                    {
+                        crate::audio::capture::set_current_backend(saved_backend);
+                        p.system_audio_backend = Some(saved_backend.as_id());
+                    } else {
+                        let backend = crate::audio::capture::get_current_backend();
+                        p.system_audio_backend = Some(backend.as_id());
+                    }
                 }
                 p
             }
@@ -288,7 +301,9 @@ pub async fn get_available_audio_backends() -> Result<Vec<String>, String> {
     #[cfg(target_os = "macos")]
     {
         let backends = crate::audio::capture::get_available_backends();
-        Ok(backends.iter().map(|b| b.to_string()).collect())
+        // Return stable ids (not Display names) so values round-trip through
+        // set_audio_backend()/AudioCaptureBackend::from_string().
+        Ok(backends.iter().map(|b| b.as_id()).collect())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -304,7 +319,7 @@ pub async fn get_current_audio_backend() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
         let backend = crate::audio::capture::get_current_backend();
-        Ok(backend.to_string())
+        Ok(backend.as_id())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -386,14 +401,14 @@ pub async fn get_audio_backend_info() -> Result<Vec<BackendInfo>, String> {
 
         let backends = vec![
             BackendInfo {
-                id: AudioCaptureBackend::ScreenCaptureKit.to_string(),
+                id: AudioCaptureBackend::ScreenCaptureKit.as_id(),
                 name: AudioCaptureBackend::ScreenCaptureKit.name().to_string(),
                 description: AudioCaptureBackend::ScreenCaptureKit
                     .description()
                     .to_string(),
             },
             BackendInfo {
-                id: AudioCaptureBackend::CoreAudio.to_string(),
+                id: AudioCaptureBackend::CoreAudio.as_id(),
                 name: AudioCaptureBackend::CoreAudio.name().to_string(),
                 description: AudioCaptureBackend::CoreAudio.description().to_string(),
             },

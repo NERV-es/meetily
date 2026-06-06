@@ -86,11 +86,11 @@ impl IcsEventBuilder {
         } else if let Some(value) = line.strip_prefix("DESCRIPTION:") {
             self.description = Some(unescape_ics(value));
         } else if line.starts_with("DTSTART") {
-            if let Some(value) = line.split(':').last() {
+            if let Some(value) = line.split(':').next_back() {
                 self.dtstart = Some(value.to_string());
             }
         } else if line.starts_with("DTEND") {
-            if let Some(value) = line.split(':').last() {
+            if let Some(value) = line.split(':').next_back() {
                 self.dtend = Some(value.to_string());
             }
         } else if let Some(value) = line.strip_prefix("LOCATION:") {

@@ -6,17 +6,18 @@ This document explains the hardware acceleration configuration for all CI/CD wor
 
 All workflows now build with optimal hardware acceleration based on the platform:
 
-| Platform | Acceleration | Technology | Performance Boost |
-|----------|-------------|------------|------------------|
-| **macOS** | GPU | Metal (default) | ~10-15x faster than CPU |
-| **Windows** | GPU | Vulkan | ~5-10x faster than CPU |
-| **Linux** | CPU Optimized | OpenBLAS | ~2-3x faster than vanilla CPU |
+|  Platform   | Acceleration  |   Technology    |       Performance Boost       |
+|-------------|---------------|-----------------|-------------------------------|
+| **macOS**   | GPU           | Metal (default) | ~10-15x faster than CPU       |
+| **Windows** | GPU           | Vulkan          | ~5-10x faster than CPU        |
+| **Linux**   | CPU Optimized | OpenBLAS        | ~2-3x faster than vanilla CPU |
 
 ## Previous Configuration (REMOVED)
 
 ### ❌ What Was Wrong
 
 **Linux/Ubuntu builds:**
+
 ```yaml
 env:
   WHISPER_NO_AVX: ON      # Disabled AVX CPU instructions
@@ -26,6 +27,7 @@ env:
 This configuration **explicitly disabled CPU optimizations**, resulting in very slow transcription performance. Even though Vulkan SDK and OpenBLAS were installed, they were not being used because the build didn't enable the required features.
 
 **Windows builds:**
+
 ```yaml
 # Vulkan SDK installed but not used
 # No --features flag specified
@@ -40,6 +42,7 @@ The Vulkan SDK was installed but the build didn't include `--features vulkan`, s
 **All workflows now include:**
 
 #### 1. Windows Builds (Vulkan GPU)
+
 ```yaml
 args: --target x86_64-pc-windows-msvc --features vulkan
 ```
@@ -56,6 +59,7 @@ args: --target x86_64-pc-windows-msvc --features vulkan
 - GPU automatically used for inference
 
 #### 2. Linux Builds (OpenBLAS CPU)
+
 ```yaml
 args: --target x86_64-unknown-linux-gnu --features openblas
 ```
@@ -77,6 +81,7 @@ args: --target x86_64-unknown-linux-gnu --features openblas
 - Optimized matrix operations for transcription
 
 #### 3. macOS Builds (Metal GPU)
+
 ```yaml
 # Metal enabled by default, no flags needed
 # Automatically uses Apple Silicon GPU
@@ -98,6 +103,7 @@ args: --target x86_64-unknown-linux-gnu --features openblas
 ### 1. `build.yml` (Reusable Workflow)
 
 **New step added:**
+
 ```yaml
 - name: Determine build features
   id: build-features
@@ -126,11 +132,13 @@ args: --target x86_64-unknown-linux-gnu --features openblas
 ```
 
 **Build command updated:**
+
 ```yaml
 args: ${{ inputs.build-args }} ${{ steps.build-features.outputs.features }}
 ```
 
 **Removed:**
+
 ```yaml
 # REMOVED: These were disabling CPU optimizations
 WHISPER_NO_AVX: ${{ contains(inputs.platform, 'ubuntu') && 'ON' || '' }}
@@ -147,6 +155,7 @@ Same changes as `build.yml`:
 ### 3. `build-windows.yml` (Windows Standalone)
 
 **Build command updated:**
+
 ```yaml
 args: --target x86_64-pc-windows-msvc --features vulkan ${{ steps.build-profile.outputs.args }}
 ```
@@ -156,6 +165,7 @@ Now explicitly enables Vulkan acceleration.
 ### 4. `build-linux.yml` (Linux Standalone)
 
 **Build command updated:**
+
 ```yaml
 args: --target x86_64-unknown-linux-gnu --features openblas ${{ steps.build-profile.outputs.args }}
 ```
@@ -165,6 +175,7 @@ Now explicitly enables OpenBLAS optimization.
 ### 5. `build-macos.yml` (macOS Standalone)
 
 **New info step added:**
+
 ```yaml
 - name: Configure build acceleration
   run: |
@@ -180,13 +191,13 @@ Documents that Metal is enabled by default.
 
 For a **10-minute meeting recording** (Whisper `base` model):
 
-| Configuration | Time to Transcribe | Real-time Factor |
-|--------------|-------------------|------------------|
-| **Old Linux (no AVX)** | ~15 minutes | 1.5x slower than real-time ⚠️ |
-| **New Linux (OpenBLAS)** | ~5 minutes | 2x faster than real-time ✅ |
-| **Old Windows (CPU)** | ~10 minutes | Same as real-time ⚠️ |
-| **New Windows (Vulkan)** | ~2 minutes | 5x faster than real-time ✅ |
-| **macOS (Metal)** | ~1 minute | 10x faster than real-time ✅ |
+|      Configuration       | Time to Transcribe |       Real-time Factor        |
+|--------------------------|--------------------|-------------------------------|
+| **Old Linux (no AVX)**   | ~15 minutes        | 1.5x slower than real-time ⚠️ |
+| **New Linux (OpenBLAS)** | ~5 minutes         | 2x faster than real-time ✅    |
+| **Old Windows (CPU)**    | ~10 minutes        | Same as real-time ⚠️          |
+| **New Windows (Vulkan)** | ~2 minutes         | 5x faster than real-time ✅    |
+| **macOS (Metal)**        | ~1 minute          | 10x faster than real-time ✅   |
 
 ### Build Time Impact
 
@@ -296,6 +307,7 @@ We chose **OpenBLAS** over Vulkan for Linux because:
 - ⚠️ Vulkan without GPU gives minimal benefit
 
 For **local Linux development with GPU**, users can manually build with:
+
 ```bash
 pnpm run tauri build -- --features vulkan
 ```
@@ -305,6 +317,7 @@ pnpm run tauri build -- --features vulkan
 ### Build Fails with Vulkan Error (Windows)
 
 **Error:**
+
 ```
 error: failed to compile whisper-rs with Vulkan support
 ```
@@ -317,6 +330,7 @@ error: failed to compile whisper-rs with Vulkan support
 ### Build Fails with OpenBLAS Error (Linux)
 
 **Error:**
+
 ```
 error: could not find OpenBLAS library
 ```
@@ -347,17 +361,14 @@ error: could not find OpenBLAS library
    - Detect if NVIDIA GPU available
    - Optionally enable CUDA feature
    - Fallback to Vulkan if CUDA fails
-
 2. **Add CoreML support** for macOS
    - Enable explicit CoreML acceleration
    - Test performance vs Metal alone
    - Document benefits
-
 3. **Dynamic feature detection**
    - Detect available hardware at runtime
    - Automatically select best backend
    - Provide user override options
-
 4. **Performance metrics**
    - Log transcription performance in CI
    - Compare across builds

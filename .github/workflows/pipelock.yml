@@ -1,15 +1,18 @@
 # Org-standard policy workflow — thin caller for the shared reusable in
 # NERV-es/.github. Byte-identical across every NERV-es fork.
-name: Typos
+name: Pipelock Agent Security Scan
 
 on:
+  push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  typos:
-    uses: NERV-es/.github/.github/workflows/typos-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
+  pipelock:
+    uses: NERV-es/.github/.github/workflows/pipelock-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
     secrets: inherit

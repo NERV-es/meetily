@@ -1,0 +1,19 @@
+# Org-standard policy workflow — thin caller for the shared reusable in
+# NERV-es/.github. Byte-identical across every NERV-es fork.
+name: Semantic PR Title
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    uses: NERV-es/.github/.github/workflows/semantic-pr-reusable.yml@c942996fd330257189a6d85e47d3201509b28e3a
+    secrets: inherit

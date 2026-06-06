@@ -7,6 +7,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ## Workflow Files
 
 ### 1. **build-devtest.yml** - DevTest Builds
+
 **Purpose:** Fast builds for development and testing
 
 **Key Features:**
@@ -26,6 +27,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 2. **build-macos.yml** - macOS Standalone Builds
+
 **Purpose:** Build and test specifically for Apple Silicon (M1/M2/M3)
 
 **Key Features:**
@@ -49,6 +51,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 3. **build-windows.yml** - Windows Standalone Builds
+
 **Purpose:** Build and test specifically for Windows x64
 
 **Key Features:**
@@ -72,6 +75,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 4. **build-linux.yml** - Linux Standalone Builds
+
 **Purpose:** Build and test for Linux distributions
 
 **Key Features:**
@@ -97,6 +101,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 5. **build-test.yml** - Multi-Platform Test Builds
+
 **Purpose:** Test builds across all platforms with signing
 
 **Key Features:**
@@ -117,6 +122,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 6. **build.yml** - Reusable Build Workflow
+
 **Purpose:** Shared workflow used by other workflows
 
 **Key Features:**
@@ -129,6 +135,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 7. **release.yml** - Production Release
+
 **Purpose:** Create official releases with signed binaries
 
 **Key Features:**
@@ -165,6 +172,7 @@ This document provides a quick overview of all available CI/CD workflows in this
 ---
 
 ### 8. **pr-main-check.yml** - Validation Check
+
 **Purpose:** Quick validation of version and configuration
 
 **Key Features:**
@@ -197,32 +205,38 @@ This document provides a quick overview of all available CI/CD workflows in this
 ## Quick Decision Guide
 
 ### "I'm developing a new feature..."
+
 - **Use `build-devtest.yml`** (manual dispatch)
 - Fast builds, no signing by default
 - Enable signing checkbox if needed
 
 ### "I need to test macOS-specific code..."
+
 - **Use `build-macos.yml`** (manual dispatch)
 - Focus on macOS
 - Optional signing
 
 ### "I need to test Windows-specific code..."
+
 - **Use `build-windows.yml`** (manual dispatch)
 - Focus on Windows
 - Optional signing
 
 ### "I need to test Linux packages..."
+
 - **Use `build-linux.yml`** (manual dispatch)
 - Choose Ubuntu version
 - Choose bundle types
 
 ### "I need signed builds for all platforms..."
+
 - **Use `build-test.yml`** (manual dispatch)
 - All platforms
 - Signing enabled
 - Full verification
 
 ### "I'm ready to release..."
+
 - **Use `release.yml`** (manual dispatch)
 - Creates GitHub Release
 - All platforms, fully signed
@@ -249,14 +263,14 @@ Standalone (don't use build.yml):
 
 ## Comparison Matrix
 
-| Workflow | Platforms | Default Signing | Speed | Retention | Use Case |
-|----------|-----------|----------------|-------|-----------|----------|
-| `build-devtest.yml` | All | OFF | Fast | 14 days | Development |
-| `build-macos.yml` | macOS | Optional | Medium | 30 days | macOS dev |
-| `build-windows.yml` | Windows | Optional | Medium | 30 days | Windows dev |
-| `build-linux.yml` | Linux | Optional | Medium | 30 days | Linux dev |
-| `build-test.yml` | All | ON | Slow | 30 days | Pre-release |
-| `release.yml` | macOS + Windows | REQUIRED | Slow | Permanent | Release |
+|      Workflow       |    Platforms    | Default Signing | Speed  | Retention |  Use Case   |
+|---------------------|-----------------|-----------------|--------|-----------|-------------|
+| `build-devtest.yml` | All             | OFF             | Fast   | 14 days   | Development |
+| `build-macos.yml`   | macOS           | Optional        | Medium | 30 days   | macOS dev   |
+| `build-windows.yml` | Windows         | Optional        | Medium | 30 days   | Windows dev |
+| `build-linux.yml`   | Linux           | Optional        | Medium | 30 days   | Linux dev   |
+| `build-test.yml`    | All             | ON              | Slow   | 30 days   | Pre-release |
+| `release.yml`       | macOS + Windows | REQUIRED        | Slow   | Permanent | Release     |
 
 ---
 
@@ -278,6 +292,7 @@ meetily-{workflow}-{platform}-{target}-{version}
 All workflows require these secrets to be configured:
 
 ### macOS Signing
+
 - `APPLE_CERTIFICATE` - Developer ID certificate (base64)
 - `APPLE_CERTIFICATE_PASSWORD` - Certificate password
 - `APPLE_ID` - Apple ID email
@@ -286,6 +301,7 @@ All workflows require these secrets to be configured:
 - `KEYCHAIN_PASSWORD` - Temporary keychain password
 
 ### Windows Signing (DigiCert)
+
 - `SM_HOST` - DigiCert host URL
 - `SM_API_KEY` - API key
 - `SM_CLIENT_CERT_FILE_B64` - Client cert (base64)
@@ -293,10 +309,12 @@ All workflows require these secrets to be configured:
 - `SM_CODE_SIGNING_CERT_SHA1_HASH` - Certificate hash
 
 ### Tauri Updater (All Platforms)
+
 - `TAURI_SIGNING_PRIVATE_KEY` - Ed25519 private key
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` - Key password
 
 ### Application Configuration
+
 - `MEETILY_RSA_PUBLIC_KEY` - License validation public key
 - `SUPABASE_URL` - Online license verification
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
@@ -316,20 +334,24 @@ All workflows require these secrets to be configured:
 ## Troubleshooting
 
 ### Build fails with version error (Windows MSI)
+
 - Ensure version in `tauri.conf.json` doesn't contain non-numeric pre-release identifiers
 - Use `0.1.3` not `0.1.2-pro-trial`
 
 ### Signing fails
+
 - Verify all required secrets are configured
 - Check secret expiration dates
 - Review workflow logs for specific errors
 
 ### Artifacts not available
+
 - Check build succeeded completely
 - Artifacts expire based on retention period
 - Ensure `upload-artifacts` is enabled
 
 ### Workflow not appearing in Actions
+
 - Verify YAML syntax is valid
 - Check file is in `.github/workflows/` directory
 - Ensure file extension is `.yml` or `.yaml`

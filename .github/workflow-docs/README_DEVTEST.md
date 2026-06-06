@@ -26,10 +26,12 @@ The workflow runs via **manual dispatch only**:
 ## Workflow Options
 
 ### Sign the build
+
 - **Unchecked (default)**: Fast builds without code signing (~25-30 minutes)
 - **Checked**: Full code signing for all platforms (~35-45 minutes)
 
 ### Upload build artifacts
+
 - **Checked (default)**: Artifacts are uploaded and available for download
 - **Unchecked**: Build runs but no artifacts are saved
 
@@ -37,29 +39,32 @@ The workflow runs via **manual dispatch only**:
 
 The workflow builds for all platforms in parallel:
 
-| Platform | Target | Output |
-|----------|--------|--------|
-| macOS (Apple Silicon) | aarch64-apple-darwin | DMG + App |
-| Windows (x64) | x86_64-pc-windows-msvc | MSI + NSIS |
-| Linux (Ubuntu 22.04) | x86_64-unknown-linux-gnu | DEB |
-| Linux (Ubuntu 24.04) | x86_64-unknown-linux-gnu | AppImage + RPM |
+|       Platform        |          Target          |     Output     |
+|-----------------------|--------------------------|----------------|
+| macOS (Apple Silicon) | aarch64-apple-darwin     | DMG + App      |
+| Windows (x64)         | x86_64-pc-windows-msvc   | MSI + NSIS     |
+| Linux (Ubuntu 22.04)  | x86_64-unknown-linux-gnu | DEB            |
+| Linux (Ubuntu 24.04)  | x86_64-unknown-linux-gnu | AppImage + RPM |
 
 ## Code Signing Details
 
 When signing is enabled:
 
 ### macOS
+
 - Uses **Apple Developer Certificate** from secrets
 - Performs **notarization** with Apple ID
 - Signs both DMG and .app bundle
 - Verifies signatures with `codesign` and `spctl`
 
 ### Windows
+
 - Uses **DigiCert KeyLocker** (cloud HSM)
 - Signs both MSI and NSIS installers
 - Verifies signatures with PowerShell
 
 ### Linux
+
 - Uses **Tauri updater signing** (Ed25519)
 - Signs update manifests for auto-updater
 
@@ -104,11 +109,11 @@ Artifacts are automatically uploaded and retained for **14 days**:
 
 Each platform uses optimal hardware acceleration:
 
-| Platform | Acceleration | Performance |
-|----------|-------------|-------------|
-| macOS | Metal GPU | 10-15x faster than CPU |
-| Windows | Vulkan GPU | 5-10x faster than CPU |
-| Linux | OpenBLAS CPU | 2-3x faster than vanilla CPU |
+| Platform | Acceleration |         Performance          |
+|----------|--------------|------------------------------|
+| macOS    | Metal GPU    | 10-15x faster than CPU       |
+| Windows  | Vulkan GPU   | 5-10x faster than CPU        |
+| Linux    | OpenBLAS CPU | 2-3x faster than vanilla CPU |
 
 ## Troubleshooting
 
@@ -127,9 +132,9 @@ Each platform uses optimal hardware acceleration:
 
 **Solutions:**
 1. Check that all required secrets are configured:
-   - `APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
-   - `SM_HOST`, `SM_API_KEY`, `SM_CODE_SIGNING_CERT_SHA1_HASH`
-   - `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- `APPLE_CERTIFICATE`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
+- `SM_HOST`, `SM_API_KEY`, `SM_CODE_SIGNING_CERT_SHA1_HASH`
+- `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 2. Review workflow logs for specific error messages
 3. Try running without signing first to isolate the issue
 
@@ -144,10 +149,10 @@ Each platform uses optimal hardware acceleration:
 
 ## Performance Comparison
 
-| Build Type | Duration | When to Use |
-|------------|----------|-------------|
-| **Unsigned** (default) | ~25-30 min | Regular development, quick testing |
-| **Signed** | ~35-45 min | Pre-release testing, production-like testing |
+|       Build Type       |  Duration  |                 When to Use                  |
+|------------------------|------------|----------------------------------------------|
+| **Unsigned** (default) | ~25-30 min | Regular development, quick testing           |
+| **Signed**             | ~35-45 min | Pre-release testing, production-like testing |
 
 ## Best Practices
 
@@ -177,3 +182,4 @@ Key configuration:
 - `build-linux.yml` - Linux-specific builds with signing
 - `build-test.yml` - All platforms with signing (pre-release)
 - `release.yml` - Production release workflow
+

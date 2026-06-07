@@ -1,0 +1,52 @@
+# Canonical Dependabot config for NERV-es forks.
+#
+# Org-level .github/dependabot.yml does NOT cascade to other repos (unlike
+# community-health files), so this template has to live in each repo at
+# .github/dependabot.yml. Use scripts/repo-sync.sh dependabot-plan to see which
+# forks are missing or drifted, and dependabot-apply to open a sync PR.
+#
+# Trim the ecosystems that don't apply to a given fork (e.g. drop swift for a
+# pure-JS repo). Keeping unused ecosystems is harmless but adds noise.
+version: 2
+updates:
+  # GitHub Actions — keeps the shared CI workflows' pinned action SHAs current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+  # JavaScript / TypeScript
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+
+  # Swift (SwiftPM) — for the macOS/iOS forks (voiceink, cotabby, meetily).
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+
+  # Python
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
